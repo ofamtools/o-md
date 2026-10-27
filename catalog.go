@@ -126,7 +126,12 @@ func (c *catalogApp) define() {
 		Verb("note", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
 		Verb("check", c.on(c.check(true)), "Check the first checklist item holding ITEM").Positional("item").
 		Verb("uncheck", c.on(c.check(false)), "Uncheck the first checklist item holding ITEM").Positional("item").
-		Verb("send-notes", c.on(c.sendNotes), "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent").Positional("pane")
+		Verb("send-notes", c.on(c.sendNotes), "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent").Positional("pane").
+		// The catalog's key row: a host mounting the Docs page answers g s
+		// on the doc list and in the markdown detail, and asks for the pane
+		// (a noun-typed parameter) with its own chooser.
+		Mode("normal").
+		Bind("g s", ochazuke.Do(docNoun+".send-notes"))
 	params := map[string]map[string]ochazuke.Parameter{
 		"list": {"root": {Type: "string", Description: "More roots to walk (" + string(os.PathListSeparator) + " or , between)"}},
 		"new": {"name": {Type: "string", Description: "The doc's name (its file NAME.md); none is untitled-TIME"},

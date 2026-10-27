@@ -111,6 +111,9 @@ func (a *App) register() {
 		Verb("path", func(c ochazuke.Ctx) ochazuke.Result { return ochazuke.Done(a.path) }, "The file the buffer is written to").
 		Verb("send-notes", func(c ochazuke.Ctx) ochazuke.Result { return a.sendNotes(ochazuke.StringArg(c.Args, "pane", "")) }, "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent; without a pane, choose one").Positional("pane").
 		Mode("normal").
+		// g s is the hinted key (the footer shows a request's first row);
+		// S stays bound, and ? and the palette list both.
+		Bind("g s", ochazuke.Do(docNoun+".send-notes")).
 		Bind("S", ochazuke.Do(docNoun+".send-notes")).
 		Bind("q", ochazuke.Do("app.quit"))
 	for verb, params := range map[string]map[string]ochazuke.Parameter{

@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/unixsuperhero/ochazuke"
 	"github.com/unixsuperhero/ochazuke/markdown"
 )
@@ -358,5 +360,75 @@ func TestPaletteSaveAs(t *testing.T) {
 	press(t, a, "enter")
 	if !exists(target) || read(t, target) != "hello\n" || a.scratch {
 		t.Fatalf("named %v scratch %v status %q", exists(target), a.scratch, a.m.Status)
+	}
+}
+
+// g s sends the notes in standalone o-md: it opens the agent chooser and
+// enter queues the notes through tuios (a fake here). g s is the hinted
+// key; S stays bound, and ? help lists both.
+func TestGSSendsNotes(t *testing.T) {
+	path := writeTemp(t, plan)
+	setEnv(t, "", "josh")
+	logf := fakeTuios(t, "p1")
+	a, err := newApp(path, t.TempDir(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.doc.View(80, 20, *a.m.Appearance)
+	press(t, a, "]", "x", "n")
+	typeText(t, a, "keep a trash view")
+	press(t, a, "esc")
+	hints := ochazuke.BindingHints(a.r, a.r.Focus)
+	if !strings.Contains(hints, "g s doc.send-notes") || strings.Contains(hints, "S doc.send-notes") {
+		t.Fatalf("hints %q: want g s hinted, S not", hints)
+	}
+	var keys []string
+	for _, row := range ochazuke.BindingHelp(a.r, a.r.Focus) {
+		if row.Operation == "doc.send-notes" {
+			keys = append(keys, row.Key)
+		}
+	}
+	if !slices.Contains(keys, "g s") || !slices.Contains(keys, "S") {
+		t.Fatalf("? help send-notes keys %v, want g s and S", keys)
+	}
+	press(t, a, "g", "s")
+	settle(t, a, a.r.PendingCommands())
+	top := a.r.Instances[a.r.TopModal()]
+	if top == nil {
+		t.Fatalf("g s opened no chooser; status %q", a.m.Status)
+	}
+	press(t, a, "enter")
+	settle(t, a, a.r.PendingCommands())
+	if log := read(t, logf); !strings.HasPrefix(log, "queue -w p1 -s s -- Notes on") || !strings.Contains(log, "keep a trash view") {
+		t.Fatalf("queued %q", log)
+	}
+	if !strings.Contains(read(t, path), "· sent: keep a trash view") {
+		t.Fatalf("not marked sent:\n%s", read(t, path))
+	}
+}
+
+// settle runs a command and the completions it answers, through the model.
+func settle(t *testing.T, a *App, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	ch := make(chan tea.Msg, 1)
+	go func() { ch <- cmd() }()
+	var msg tea.Msg
+	select {
+	case msg = <-ch:
+	case <-time.After(5 * time.Second):
+		return // a timer
+	}
+	switch msg := msg.(type) {
+	case tea.BatchMsg:
+		for _, c := range msg {
+			settle(t, a, c)
+		}
+	case ochazuke.Completion:
+		_, next := a.m.Update(msg)
+		settle(t, a, next)
+		settle(t, a, a.r.PendingCommands())
 	}
 }
