@@ -60,10 +60,61 @@ func typeText(t *testing.T, a *App, s string) {
 	}
 }
 
+// setEnv runs as pane (an agent tuios lists, through a fake tuios; ""
+// none) for user.
 func setEnv(t *testing.T, pane, user string) {
 	t.Setenv("TUIOS_PANE_ID", pane)
 	t.Setenv("USER", user)
 	t.Setenv("O_MD_OWNER", "")
+	fakeTuios(t, pane)
+}
+
+// fakeTuios is a tuios that lists an agent in each pane given and logs
+// every other command to the file it answers.
+func fakeTuios(t *testing.T, panes ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	logf := filepath.Join(dir, "log")
+	var agents []string
+	for _, p := range panes {
+		if p != "" {
+			agents = append(agents, `{"window_id":"`+p+`","name":"agent","state":"idle","ready":true,"session":"s"}`)
+		}
+	}
+	script := "#!/bin/sh\nif [ \"$1\" = list-agents ]; then echo '{\"agents\":[" + strings.Join(agents, ",") + "]}'; exit 0; fi\necho \"$@\" >> " + logf + "\n"
+	fake := filepath.Join(dir, "tuios")
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("O_MD_TUIOS", fake)
+	return logf
+}
+
+// A pane tuios lists no agent in is the owner's (mtm, a shell); an agent
+// may not sign as the owner.
+func TestIdentityNeedsAnAgent(t *testing.T) {
+	path := writeTemp(t, plan)
+	t.Setenv("TUIOS_PANE_ID", "aaaaaaaa-1111-2222-3333-444444444444")
+	t.Setenv("USER", "josh")
+	t.Setenv("O_MD_OWNER", "")
+	fakeTuios(t) // no agents
+	if _, err := cli(t, "note", path, "--item", "inbox page", "from a shell pane"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(t, path), "> **josh** ") {
+		t.Fatalf("a pane without an agent is not the owner:\n%s", read(t, path))
+	}
+	agent := "bbbbbbbb-1111-2222-3333-444444444444"
+	setEnv(t, agent, "josh")
+	if _, err := cli(t, "note", path, "--item", "archive", "--author", "josh", "pretending"); err == nil || !strings.Contains(err.Error(), "may not sign as the owner") {
+		t.Fatalf("an agent signed as the owner: %v", err)
+	}
+	if _, err := cli(t, "note", path, "--item", "archive", "--author", "owner", "pretending"); err == nil {
+		t.Fatal("an agent signed as owner")
+	}
+	if _, err := cli(t, "note", path, "--item", "archive", "mine"); err != nil || !strings.Contains(read(t, path), "> **"+agent+"** ") {
+		t.Fatalf("agent note: %v\n%s", err, read(t, path))
+	}
 }
 
 // An agent adds a note, replies, and reads them back; its identity is
@@ -165,6 +216,7 @@ func TestSend(t *testing.T) {
 	path := writeTemp(t, plan)
 	setEnv(t, "", "josh")
 	_, _ = cli(t, "note", path, "--item", "archive", "keep a trash view")
+	t.Setenv("TUIOS_PANE_ID", "")
 	dir := t.TempDir()
 	logf := filepath.Join(dir, "log")
 	fake := filepath.Join(dir, "tuios")

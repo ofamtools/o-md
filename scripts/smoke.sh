@@ -25,7 +25,11 @@ grep -q '^+  > \*\*owner\*\* [0-9-]*: a smoke note$' "$work/tui.diff" || fail "n
 [ "$(grep -v '^\(---\|+++\) ' "$work/tui.diff" | grep -c '^[-+]')" -eq 4 ] || fail "more lines changed than the edits"
 
 # 2. Agent commands: an agent (pane id) notes, the owner's note is not its to resolve.
+# A pane is an agent only when tuios lists one there: a fake tuios lists it.
 agent=11111111-2222-3333-4444-555555555555
+printf '#!/bin/sh\nif [ "$1" = list-agents ]; then echo '"'"'{"agents":[{"window_id":"%s","name":"smoke","state":"idle","ready":true,"session":"s"}]}'"'"'; fi\n' "$agent" > "$work/tuios"
+chmod +x "$work/tuios"
+export O_MD_TUIOS="$work/tuios"
 id=$(TUIOS_PANE_ID=$agent "$bin" note "$copy" --item "Archive and restore" "started on the trash view")
 echo "agent note: $id"
 TUIOS_PANE_ID=$agent "$bin" notes "$copy" --item "Archive and restore" | tee "$work/notes.jsonl"
@@ -48,6 +52,19 @@ grep -q -- '--reply ID TEXT$' "$work/prompt.txt" || fail "prompt closing line"
 grep -q 'a smoke note' "$work/send.txt" || fail "send --dry-run"
 "$bin" check "$copy" --item "Archive and restore"
 grep -q '^- \[x\] Archive and restore' "$copy" || fail "check"
+if TUIOS_PANE_ID=$agent "$bin" note "$copy" --item "Archive and restore" --author owner "not me" 2> "$work/refused2"; then fail "agent signed as the owner"; fi
+grep -q "may not sign as the owner" "$work/refused2" || fail "owner refusal message"
+TUIOS_PANE_ID=99999999-2222-3333-4444-555555555555 "$bin" note "$copy" --item "Archive and restore" "from a shell pane" > /dev/null
+grep -q '> \*\*owner\*\* [0-9-]*: from a shell pane' "$copy" || fail "a pane without an agent is the owner"
+
+# 2b. The extension: catalog, doc list over a temp root, a verb on a target.
+export O_MD_ROOTS="$work" XDG_CONFIG_HOME="$work/config" MTM_PROJECT_DIRS=
+"$bin" catalog > "$work/catalog.json"
+grep -q '"kind": "markdown"' "$work/catalog.json" || fail "catalog: markdown detail"
+"$bin" doc list --json '{}' > "$work/docs.json"
+grep -q '"path": *"'"$copy"'"' "$work/docs.json" || grep -q "features.md" "$work/docs.json" || fail "doc list"
+"$bin" doc uncheck "Archive and restore" --target "$copy" > /dev/null
+grep -q '^- \[ \] Archive and restore' "$copy" || fail "doc uncheck"
 
 # 3. A bare o-md is a scratch buffer: type a checklist, quit, reopen with -r.
 python3 "$keys" '["o", "- [ ] scratch task", {"key":"esc"}, {"sleep":0.5}, "q"]' -- "$bin"

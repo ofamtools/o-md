@@ -10,6 +10,8 @@
 //	o-md notes FILE ...    print the notes (JSON Lines, or --format prompt)
 //	o-md check FILE --item MATCH / o-md uncheck FILE --item MATCH
 //	o-md send FILE --pane ID [--now] [--dry-run]
+//	o-md doc VERB [--target PATH] ...   the family extension's verbs (catalog.go)
+//	o-md catalog                        the catalog a host (mtm) mounts
 package main
 
 import (
@@ -33,9 +35,14 @@ const usage = `Usage:
   o-md notes FILE [--item MATCH] [--unresolved] [--unsent] [--format jsonl|prompt]
   o-md check FILE --item MATCH | o-md uncheck FILE --item MATCH
   o-md send FILE --pane ID [--now] [--dry-run]
+  o-md doc list|show|new|rename|delete|copy-path|notes|note|check|uncheck|send-notes [--target PATH] ...
+  o-md catalog                   the extension's catalog (mtm extension register md mounts its Docs page)
 
-TEXT "-" reads stdin. A note's author is --author, else $TUIOS_PANE_ID, else $USER;
-only a note's author or the owner may edit, resolve or delete it.
+doc list walks docs.roots (o-md settings set docs.roots ...; $O_MD_ROOTS overrides) and
+the host's project directories ($MTM_PROJECT_DIRS: top-level *.md and docs/**/*.md).
+TEXT "-" reads stdin. A note's author is --author, else $TUIOS_PANE_ID when tuios lists
+an agent in that pane, else the owner ($O_MD_OWNER, else $USER); an agent may not sign
+as the owner. Only a note's author or the owner may edit, resolve or delete it.
 Scratch buffers live in $O_MD_DATA, else $XDG_DATA_HOME/o-md, else ~/.local/share/o-md.
 
 Keys: j/k lines, }/{ components, ]]/[[ same kind, ]h ]t ]x ]l ]c ]q ]n by kind,
@@ -55,6 +62,9 @@ func main() {
 }
 
 func run(argv []string, stdin io.Reader, stdout io.Writer) error {
+	if isShellCommand(argv) {
+		return runShell(argv, stdin, stdout, os.Stderr)
+	}
 	if len(argv) > 0 {
 		switch argv[0] {
 		case "note":

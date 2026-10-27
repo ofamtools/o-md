@@ -83,6 +83,93 @@ func readText(path string) (string, error) {
 	return string(b), err
 }
 
+// noteOp is one change to a file's notes: exactly one of Item (add a
+// note under the first item holding it), Reply, Edit, Resolve, Unresolve
+// or Delete (a note id); Text for add, reply and edit. Author is the
+// --author given ("" for the caller's own identity).
+type noteOp struct {
+	Item, Reply, Edit, Resolve, Unresolve, Delete string
+	Text, Author                                  string
+}
+
+// changeNote applies op to the file at path and answers the id of a note
+// it added ("" for the other changes).
+func changeNote(path string, op noteOp) (string, error) {
+	src, err := readText(path)
+	if err != nil {
+		return "", err
+	}
+	caller, _, err := identity(op.Author)
+	if err != nil {
+		return "", err
+	}
+	var next string
+	var at int
+	switch {
+	case op.Resolve != "", op.Unresolve != "":
+		n, err := noteByID(src, op.Resolve+op.Unresolve)
+		if err != nil {
+			return "", err
+		}
+		if err := mayChange(caller, n); err != nil {
+			return "", err
+		}
+		next, err = markdown.SetResolved(src, markdown.Elements(src)[n.Element], op.Resolve != "")
+		if err != nil {
+			return "", err
+		}
+	case op.Delete != "":
+		n, err := noteByID(src, op.Delete)
+		if err != nil {
+			return "", err
+		}
+		if err := mayChange(caller, n); err != nil {
+			return "", err
+		}
+		next = deleteNote(src, n)
+	case op.Edit != "":
+		n, err := noteByID(src, op.Edit)
+		if err != nil {
+			return "", err
+		}
+		if err := mayChange(caller, n); err != nil {
+			return "", err
+		}
+		if next, err = editNote(src, n, op.Text); err != nil {
+			return "", err
+		}
+	case op.Reply != "":
+		n, err := noteByID(src, op.Reply)
+		if err != nil {
+			return "", err
+		}
+		if next, at, err = markdown.ReplyNote(src, n.Element, caller, today(), op.Text); err != nil {
+			return "", err
+		}
+	case op.Item != "":
+		item, err := markdown.FindItem(src, op.Item)
+		if err != nil {
+			return "", err
+		}
+		if next, at, err = markdown.AddNote(src, item, caller, today(), op.Text); err != nil {
+			return "", err
+		}
+	default:
+		return "", errors.New("a note change needs item, reply, edit, resolve, unresolve or delete")
+	}
+	if err := markdown.WriteFile(path, next); err != nil {
+		return "", err
+	}
+	if at > 0 {
+		for _, n := range markdown.Notes(next) {
+			if e := markdown.Elements(next)[n.Element]; e.Start == at {
+				return n.ID, nil
+			}
+		}
+	}
+	return "", nil
+}
+
 // cmdNote adds, replies to, edits, resolves, reopens or deletes a note.
 func cmdNote(in []string, stdin io.Reader, stdout io.Writer) error {
 	a, err := parseArgs(in)
@@ -93,87 +180,21 @@ func cmdNote(in []string, stdin io.Reader, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	src, err := readText(path)
+	op := noteOp{Item: a.flags["item"], Reply: a.flags["reply"], Edit: a.flags["edit"], Resolve: a.flags["resolve"], Unresolve: a.flags["unresolve"], Delete: a.flags["delete"], Author: a.flags["author"]}
+	if !a.has("item") && !a.has("reply") && !a.has("edit") && !a.has("resolve") && !a.has("unresolve") && !a.has("delete") {
+		return errors.New("o-md note needs --item MATCH, --reply ID, --edit ID, --resolve ID, --unresolve ID or --delete ID")
+	}
+	if op.Item != "" || op.Reply != "" || op.Edit != "" {
+		if op.Text, err = a.text(stdin); err != nil {
+			return err
+		}
+	}
+	id, err := changeNote(path, op)
 	if err != nil {
 		return err
 	}
-	caller, _ := identity(a.flags["author"])
-	var next string
-	var at int
-	switch {
-	case a.has("resolve"), a.has("unresolve"):
-		id := a.flags["resolve"] + a.flags["unresolve"]
-		n, err := noteByID(src, id)
-		if err != nil {
-			return err
-		}
-		if err := mayChange(caller, n); err != nil {
-			return err
-		}
-		next, err = markdown.SetResolved(src, markdown.Elements(src)[n.Element], a.has("resolve"))
-		if err != nil {
-			return err
-		}
-	case a.has("delete"):
-		n, err := noteByID(src, a.flags["delete"])
-		if err != nil {
-			return err
-		}
-		if err := mayChange(caller, n); err != nil {
-			return err
-		}
-		next = deleteNote(src, n)
-	case a.has("edit"):
-		n, err := noteByID(src, a.flags["edit"])
-		if err != nil {
-			return err
-		}
-		if err := mayChange(caller, n); err != nil {
-			return err
-		}
-		text, err := a.text(stdin)
-		if err != nil {
-			return err
-		}
-		if next, err = editNote(src, n, text); err != nil {
-			return err
-		}
-	case a.has("reply"):
-		n, err := noteByID(src, a.flags["reply"])
-		if err != nil {
-			return err
-		}
-		text, err := a.text(stdin)
-		if err != nil {
-			return err
-		}
-		if next, at, err = markdown.ReplyNote(src, n.Element, caller, today(), text); err != nil {
-			return err
-		}
-	case a.has("item"):
-		item, err := markdown.FindItem(src, a.flags["item"])
-		if err != nil {
-			return err
-		}
-		text, err := a.text(stdin)
-		if err != nil {
-			return err
-		}
-		if next, at, err = markdown.AddNote(src, item, caller, today(), text); err != nil {
-			return err
-		}
-	default:
-		return errors.New("o-md note needs --item MATCH, --reply ID, --edit ID, --resolve ID, --unresolve ID or --delete ID")
-	}
-	if err := markdown.WriteFile(path, next); err != nil {
-		return err
-	}
-	if at > 0 {
-		for _, n := range markdown.Notes(next) {
-			if e := markdown.Elements(next)[n.Element]; e.Start == at {
-				fmt.Fprintln(stdout, n.ID)
-			}
-		}
+	if id != "" {
+		fmt.Fprintln(stdout, id)
 	}
 	return nil
 }
@@ -207,8 +228,11 @@ func cmdNotes(in []string, stdout io.Writer) error {
 		}
 		return nil
 	case "prompt":
-		from, _ := identity(a.flags["author"])
-		_, err := fmt.Fprintln(stdout, compose(path, src, from, openNotes(notes, false)))
+		from, _, err := identity(a.flags["author"])
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(stdout, compose(path, src, from, openNotes(notes, false)))
 		return err
 	}
 	return fmt.Errorf("unknown --format %q (jsonl or prompt)", a.flags["format"])
@@ -254,11 +278,16 @@ func cmdCheck(in []string, check bool) error {
 	if !a.has("item") {
 		return fmt.Errorf("o-md %s needs --item MATCH", cmd)
 	}
+	return checkItem(path, a.flags["item"], check)
+}
+
+// checkItem checks or unchecks the first checklist item holding match.
+func checkItem(path, match string, check bool) error {
 	src, err := readText(path)
 	if err != nil {
 		return err
 	}
-	item, err := markdown.FindItem(src, a.flags["item"])
+	item, err := markdown.FindItem(src, match)
 	if err != nil {
 		return err
 	}
@@ -352,44 +381,68 @@ func cmdSend(in []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	src, err := readText(path)
-	if err != nil {
-		return err
-	}
-	notes, err := selectNotes(src, a)
-	if err != nil {
-		return err
-	}
-	notes = openNotes(notes, true)
-	if len(notes) == 0 {
-		return errors.New("no open, unsent notes to send")
-	}
-	from, _ := identity(a.flags["author"])
-	prompt := compose(path, src, from, notes)
 	if a.has("dry-run") {
-		_, err := fmt.Fprintln(stdout, prompt)
+		prompt, _, err := sendPrompt(path, a)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(stdout, prompt)
 		return err
 	}
 	pane := a.flags["pane"]
 	if pane == "" {
 		return errors.New("o-md send needs --pane ID (or --dry-run)")
 	}
-	if err := deliver(pane, prompt, a.has("now")); err != nil {
-		return err
+	_, err = sendNotes(path, pane, a.has("now"), a)
+	return err
+}
+
+// sendPrompt is the prompt of the open, unsent notes the args select
+// (--item) and their ids.
+func sendPrompt(path string, a args) (string, []string, error) {
+	src, err := readText(path)
+	if err != nil {
+		return "", nil, err
+	}
+	notes, err := selectNotes(src, a)
+	if err != nil {
+		return "", nil, err
+	}
+	notes = openNotes(notes, true)
+	if len(notes) == 0 {
+		return "", nil, errors.New("no open, unsent notes to send")
+	}
+	from, _, err := identity(a.flags["author"])
+	if err != nil {
+		return "", nil, err
 	}
 	ids := make([]string, len(notes))
 	for i, n := range notes {
 		ids[i] = n.ID
 	}
+	return compose(path, src, from, notes), ids, nil
+}
+
+// sendNotes queues the open, unsent notes for pane through tuios and
+// marks them sent; it answers how many it sent.
+func sendNotes(path, pane string, now bool, a args) (int, error) {
+	prompt, ids, err := sendPrompt(path, a)
+	if err != nil {
+		return 0, err
+	}
+	if err := deliver(pane, prompt, now); err != nil {
+		return 0, err
+	}
 	// The file as it is now, so an edit made meanwhile is kept.
-	if src, err = readText(path); err != nil {
-		return err
+	src, err := readText(path)
+	if err != nil {
+		return 0, err
 	}
 	next, err := markSent(src, ids)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return markdown.WriteFile(path, next)
+	return len(ids), markdown.WriteFile(path, next)
 }
 
 // cmdScratch lists the scratch buffers, newest first.

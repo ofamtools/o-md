@@ -12,16 +12,41 @@ import (
 )
 
 // identity is who runs an agent command: the --author given (self
-// declared), else the tuios pane the command runs in ($TUIOS_PANE_ID),
-// else the user ($USER, the owner).
-func identity(flagAuthor string) (author string, declared bool) {
+// declared), else the tuios agent the command runs in ($TUIOS_PANE_ID,
+// when tuios list-agents lists an agent in that pane), else the owner
+// ($O_MD_OWNER, else $USER). A pane that is not an agent's (a shell, mtm)
+// is the owner's. An agent may not declare itself the owner.
+func identity(flagAuthor string) (author string, declared bool, err error) {
+	agent := callerAgent()
 	if flagAuthor != "" {
-		return flagAuthor, true
+		if agent != "" && isOwner(flagAuthor) {
+			return "", false, fmt.Errorf("an agent (pane %s) may not sign as the owner %q", agent, flagAuthor)
+		}
+		return flagAuthor, true, nil
 	}
-	if p := os.Getenv("TUIOS_PANE_ID"); p != "" {
-		return p, false
+	if agent != "" {
+		return agent, false, nil
 	}
-	return owner(), false
+	return owner(), false, nil
+}
+
+// callerAgent is $TUIOS_PANE_ID when tuios lists an agent in that pane,
+// else "" (no pane, a pane without an agent, or tuios not answering).
+func callerAgent() string {
+	pane := os.Getenv("TUIOS_PANE_ID")
+	if pane == "" {
+		return ""
+	}
+	list, err := agents()
+	if err != nil {
+		return ""
+	}
+	for _, a := range list {
+		if a.ID == pane {
+			return pane
+		}
+	}
+	return ""
 }
 
 // owner is the owner's name: $O_MD_OWNER, else $USER, else "owner".
