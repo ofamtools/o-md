@@ -100,7 +100,7 @@ func TestDocList(t *testing.T) {
 	// docs.roots from the settings when $O_MD_ROOTS is unset; --root adds.
 	os.Unsetenv("O_MD_ROOTS")
 	t.Setenv("MTM_PROJECT_DIRS", "")
-	mustShell(t, "settings", "set", rootsSetting, `["`+filepath.Join(root, "deep")+`"]`)
+	mustShell(t, "settings", "set", rootsSetting, `["`+filepath.Join(root, "deep")+`"]`, "--yes")
 	rows = listRows(t)
 	if len(rows) != 1 || rows["notes.md"].Path == "" {
 		t.Fatalf("settings roots: %v", rows)
