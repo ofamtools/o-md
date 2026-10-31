@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke"
-	ocli "github.com/unixsuperhero/ochazuke/cli"
-	"github.com/unixsuperhero/ochazuke/markdown"
-	"github.com/unixsuperhero/oden"
+	"ofam.dev/ochazuke"
+	ocli "ofam.dev/ochazuke/cli"
+	"ofam.dev/ochazuke/markdown"
+	"ofam.dev/oden"
 )
 
 // The catalog: o-md as a family extension. Noun doc lists the Markdown

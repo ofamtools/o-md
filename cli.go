@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/unixsuperhero/ochazuke/markdown"
+	"ofam.dev/ochazuke/markdown"
 )
 
 // args are a command's words: flags anywhere (--name value, --name=value,

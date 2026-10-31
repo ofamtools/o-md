@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke/markdown"
+	"ofam.dev/ochazuke/markdown"
 )
 
 // identity is who runs an agent command: the --author given (self

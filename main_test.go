@@ -11,8 +11,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/unixsuperhero/ochazuke"
-	"github.com/unixsuperhero/ochazuke/markdown"
+	"ofam.dev/ochazuke"
+	"ofam.dev/ochazuke/markdown"
 )
 
 const plan = "# Plan\n\n## Inbox\n\n- [ ] Inbox page\n  - [ ] Read/unread per turn\n- [ ] Archive and restore\n\n## Prompts\n\n- [ ] Saved prompts\n"

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke/markdown"
+	"ofam.dev/ochazuke/markdown"
 )
 
 // dataDir is where o-md keeps its data: --data, else $O_MD_DATA, else

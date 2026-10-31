@@ -1,12 +1,12 @@
-module github.com/unixsuperhero/o-md
+module ofam.dev/o-md
 
 go 1.26.0
 
 require (
 	charm.land/bubbletea/v2 v2.1.0
 	github.com/charmbracelet/x/ansi v0.11.9
-	github.com/unixsuperhero/ochazuke v0.59.1
-	github.com/unixsuperhero/oden v0.1.1
+	ofam.dev/ochazuke v0.59.1
+	ofam.dev/oden v0.1.1
 )
 
 require (

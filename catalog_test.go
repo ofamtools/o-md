@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	ocli "github.com/unixsuperhero/ochazuke/cli"
+	ocli "ofam.dev/ochazuke/cli"
 )
 
 // shell runs one catalog command and answers its stdout.
