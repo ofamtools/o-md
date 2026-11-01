@@ -18,12 +18,13 @@ there is no save key, and `u` / `ctrl+r` undo and redo.
 
 Notes are short threaded comments stored in the file itself, as a quote under
 the list item they are about. People and agents add, answer and resolve them
-from the editor or the command line, and `o-md send` hands the open notes to
+from the editor or the command line, and `o md send` hands the open notes to
 an agent's pane as one prompt.
 
 ## Install
 
 ```sh
+go install ofam.dev/oden/cmd/o@latest   # oden's o: o md runs o-md, no dash needed
 go install ofam.dev/o-md@latest
 mtm extension register md        # mounts the Docs page and the doc.* verbs in mtm
 ```
@@ -31,20 +32,20 @@ mtm extension register md        # mounts the Docs page and the doc.* verbs in m
 ## Usage
 
 ```sh
-o-md plan.md                     # open plan.md (created empty when missing)
-o-md                             # a new scratch buffer; :save-as PATH names it
-o-md -r                          # reopen the newest scratch buffer
-o-md scratch [--json]            # list scratch buffers, newest first
+o md plan.md                     # open plan.md (created empty when missing)
+o md                             # a new scratch buffer; :save-as PATH names it
+o md -r                          # reopen the newest scratch buffer
+o md scratch [--json]            # list scratch buffers, newest first
 ```
 
 Notes and checklists from the command line:
 
 ```sh
-$ o-md note plan.md --item README "say which badges"
+$ o md note plan.md --item README "say which badges"
 1.1
-$ o-md notes plan.md
+$ o md notes plan.md
 {"id":"1.1","item":"write the README","item_line":3,"line":4,"author":"me","text":"say which badges","resolved":false,"sent":false,...}
-$ o-md check plan.md --item logo          # tick the first checklist item holding "logo"
+$ o md check plan.md --item logo          # tick the first checklist item holding "logo"
 $ cat plan.md
 # Plan
 
@@ -54,10 +55,10 @@ $ cat plan.md
 ```
 
 ```sh
-o-md note FILE --reply ID TEXT                     # answer note ID
-o-md note FILE --edit ID TEXT | --resolve ID | --unresolve ID | --delete ID
-o-md notes FILE [--item MATCH] [--unresolved] [--unsent] [--format jsonl|prompt]
-o-md send FILE --pane ID [--now] [--dry-run]       # queue the open notes to an agent's tuios pane
+o md note FILE --reply ID TEXT                     # answer note ID
+o md note FILE --edit ID TEXT | --resolve ID | --unresolve ID | --delete ID
+o md notes FILE [--item MATCH] [--unresolved] [--unsent] [--format jsonl|prompt]
+o md send FILE --pane ID [--now] [--dry-run]       # queue the open notes to an agent's tuios pane
 ```
 
 TEXT `-` reads stdin. A note's author is `--author`, else the agent tuios lists
@@ -83,22 +84,22 @@ prompt without sending. Sent notes are marked so they are not sent twice.
 
 ## The Docs page and `doc` verbs
 
-`o-md catalog` is the extension's catalog. Registered in mtm, it adds a Docs
+`o md catalog` is the extension's catalog. Registered in mtm, it adds a Docs
 page (a list with a preview) and the `doc` noun, also reachable through mtm's
 MCP gateway as `md.doc.*`:
 
 ```sh
-o-md doc list [--root DIR]
-o-md doc new [--name NAME] [--root DIR]
-o-md doc show|delete|copy-path --target PATH
-o-md doc rename --target PATH --to NAME
-o-md doc notes|note|check|uncheck|send-notes --target PATH ...
-o-md doc --help                  # every verb and its parameters
+o md doc list [--root DIR]
+o md doc new [--name NAME] [--root DIR]
+o md doc show|delete|copy-path --target PATH
+o md doc rename --target PATH --to NAME
+o md doc notes|note|check|uncheck|send-notes --target PATH ...
+o md doc --help                  # every verb and its parameters
 ```
 
 `doc list` walks `docs.roots` (default `~/hub/o-plans` and `~/claude/docs`;
 `$O_MD_ROOTS` overrides; set it with
-`o-md settings set docs.roots '["~/notes"]'`) and the
+`o md settings set docs.roots '["~/notes"]'`) and the
 host's project directories (`$MTM_PROJECT_DIRS`: each one's top-level `*.md`
 and `docs/**/*.md`). Rows show title, root, modified time, open tasks and open
 notes. `doc delete` asks for confirmation.
