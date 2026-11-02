@@ -97,8 +97,8 @@ o md doc notes|note|check|uncheck|send-notes --target PATH ...
 o md doc --help                  # every verb and its parameters
 ```
 
-`doc list` walks `docs.roots` (default `~/hub/o-plans` and `~/claude/docs`;
-`$O_MD_ROOTS` overrides; set it with
+`doc list` walks the folders configured in `docs.roots`
+(`$O_MD_ROOTS` overrides; set it with
 `o md settings set docs.roots '["~/notes"]'`) and the
 host's project directories (`$MTM_PROJECT_DIRS`: each one's top-level `*.md`
 and `docs/**/*.md`). Rows show title, root, modified time, open tasks and open
