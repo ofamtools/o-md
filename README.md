@@ -89,9 +89,9 @@ page (a list with a preview) and the `doc` noun, also reachable through mtm's
 MCP gateway as `md.doc.*`:
 
 ```sh
-o md doc list [--root DIR]
+o md doc list [--root DIR] [--archived]
 o md doc new [--name NAME] [--root DIR]
-o md doc show|delete|copy-path --target PATH
+o md doc show|delete|archive|restore|copy-path --target PATH
 o md doc rename --target PATH --to NAME
 o md doc notes|note|check|uncheck|send-notes --target PATH ...
 o md doc --help                  # every verb and its parameters
@@ -102,7 +102,13 @@ o md doc --help                  # every verb and its parameters
 `o md settings set docs.roots '["~/notes"]'`) and the
 host's project directories (`$MTM_PROJECT_DIRS`: each one's top-level `*.md`
 and `docs/**/*.md`). Rows show title, root, modified time, open tasks and open
-notes. `doc delete` asks for confirmation.
+notes. `doc archive` moves a file to `<root>/.archive/<relative path>` and
+`doc restore` moves it back. Both refuse to overwrite an existing file.
+The default list skips `.archive`; `--archived` lists only archived files.
+Set `docs.hide-archived` to `false` to include them in the normal list.
+`doc delete` remains available to the owner with confirmation and carries
+the destructive flag for agent-aware hosts. Hosts using ochazuke v0.85.0
+or newer refuse it for agents and name `doc.archive` instead.
 
 ## Data
 

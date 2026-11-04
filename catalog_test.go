@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"ofam.dev/ochazuke"
 	ocli "ofam.dev/ochazuke/cli"
 )
 
@@ -167,6 +168,98 @@ func TestDocVerbs(t *testing.T) {
 	var copied map[string]any
 	if err := json.Unmarshal([]byte(mustShell(t, "doc", "copy-path", "--target", path)), &copied); err != nil || copied["path"] != path || copied["copied"] != true {
 		t.Fatalf("copy-path %v %v", copied, err)
+	}
+}
+
+func TestDocArchiveRoundTrip(t *testing.T) {
+	root, proj := docEnv(t)
+	for _, path := range []string{filepath.Join(root, "deep", "notes.md"), filepath.Join(proj, "docs", "guide", "guide.md")} {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			before := read(t, path)
+			base := root
+			if strings.HasPrefix(path, proj+string(filepath.Separator)) {
+				base = proj
+			}
+			rel, err := filepath.Rel(base, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dest := filepath.Join(base, ".archive", rel)
+			var row docRow
+			if err := json.Unmarshal([]byte(mustShell(t, "doc", "archive", "--target", path)), &row); err != nil || row.Path != dest {
+				t.Fatalf("archive: %+v %v", row, err)
+			}
+			if exists(path) || read(t, dest) != before {
+				t.Fatal("archive did not preserve the file")
+			}
+			if _, ok := listRows(t)[filepath.Base(path)]; ok {
+				t.Fatal("archived document in the default list")
+			}
+			var rows []docRow
+			if err := json.Unmarshal([]byte(mustShell(t, "doc", "list", "--archived")), &rows); err != nil || len(rows) != 1 || rows[0].Path != dest {
+				t.Fatalf("archived list: %+v %v", rows, err)
+			}
+			mustShell(t, "settings", "set", "docs.hide-archived", "false", "--yes")
+			if got := listRows(t)[filepath.Base(path)].Path; got != dest {
+				t.Fatalf("archive hiding opt-out: %s", got)
+			}
+			mustShell(t, "settings", "set", "docs.hide-archived", "true", "--yes")
+			// Retrying archive is harmless; restoring must not replace a new file.
+			mustShell(t, "doc", "archive", "--target", dest)
+			writeFile(t, path, "# Replacement\n")
+			if _, err := shell(t, "doc", "restore", "--target", dest); err == nil || read(t, path) != "# Replacement\n" || read(t, dest) != before {
+				t.Fatalf("restore overwrote a file: %v", err)
+			}
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			mustShell(t, "doc", "restore", "--target", dest)
+			if exists(dest) || read(t, path) != before || listRows(t)[filepath.Base(path)].Path != path {
+				t.Fatal("restore did not recover the document")
+			}
+		})
+	}
+}
+
+func TestDocArchiveCollision(t *testing.T) {
+	root, _ := docEnv(t)
+	path := filepath.Join(root, "plan.md")
+	dest := filepath.Join(root, ".archive", "plan.md")
+	before := read(t, path)
+	writeFile(t, dest, "# Earlier archive\n")
+	if _, err := shell(t, "doc", "archive", "--target", path); err == nil || read(t, dest) != "# Earlier archive\n" || read(t, path) != before {
+		t.Fatalf("archive overwrote a file: %v", err)
+	}
+	if _, err := shell(t, "doc", "restore", "--target", path); err == nil || read(t, path) != before {
+		t.Fatalf("restored a live document: %v", err)
+	}
+}
+
+func TestDocArchiveAttribution(t *testing.T) {
+	root, _ := docEnv(t)
+	c, err := newCatalogApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := ochazuke.Actor{Kind: ochazuke.ActorAgent, Name: "archive-test", Harness: "codex", Session: "fixture"}
+	path := filepath.Join(root, "plan.md")
+	for _, step := range []struct{ verb, path string }{
+		{"archive", path},
+		{"restore", filepath.Join(root, ".archive", "plan.md")},
+	} {
+		if err := c.reveal(step.path); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.r.Execute(ochazuke.Request{Noun: docNoun, Verb: step.verb, Target: step.path, Actor: &actor}); err != nil {
+			t.Fatal(err)
+		}
+		entry := c.r.History(1)[0]
+		if entry.Context.Actor != actor || entry.Request.Verb != step.verb || !entry.Result.OK {
+			t.Fatalf("archive history: %+v", entry)
+		}
+	}
+	if read(t, path) != plan {
+		t.Fatal("agent round trip changed document content")
 	}
 }
 

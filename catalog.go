@@ -24,7 +24,7 @@ import (
 // The catalog: o-md as a family extension. Noun doc lists the Markdown
 // files under the docs roots (rows: title, path, root, modified,
 // open_tasks, open_notes) and acts on one (--target PATH): new, rename,
-// delete, copy-path, show, notes, note, check, uncheck and send-notes. The
+// delete, archive, restore, copy-path, show, notes, note, check, uncheck and send-notes. The
 // Docs page (docsPage) is a split of the docs list beside a markdown
 // detail (detail kind markdown, pathField path): a host that registers
 // the kind (mtm, markdown/cliview) draws the selected file as an editable
@@ -95,6 +95,10 @@ func newCatalogApp() (*catalogApp, error) {
 		Description: "The directories doc list walks for Markdown files (~ is your home); $O_MD_ROOTS (" + string(os.PathListSeparator) + " between) overrides it"}); err != nil {
 		return nil, err
 	}
+	if err := r.DeclareSetting(ochazuke.Setting{Name: "docs.hide-archived", Type: ochazuke.SettingBoolean, Default: true,
+		Description: "Hide archived documents from doc list; --archived lists only archived documents"}); err != nil {
+		return nil, err
+	}
 	r.Instance(docsPageID, ochazuke.Kind(docNoun+"-page"))
 	var err error
 	if c.list, err = r.AddList(docsListID, nil, ochazuke.Parent(docsPageID), ochazuke.Columns(docColumns...)); err != nil {
@@ -120,7 +124,9 @@ func (c *catalogApp) define() {
 		Verb("show", c.on(c.showDoc), "Show one doc's row").Fetch().
 		Verb("new", c.newDoc, "Create a doc: NAME.md under ROOT (default the first docs root), a heading of its name; no name is an untitled doc").Positional("name", "root").
 		Verb("rename", c.on(c.renameDoc), "Rename a doc's file: TO is a new name in the same directory, or a path").Positional("to").
-		Verb("delete", c.on(c.deleteDoc), "Delete a doc's file").Confirm("Delete {{label}}? The file is removed from disk.").
+		Verb("delete", c.on(c.deleteDoc), "Delete a doc's file").Destructive().Confirm("Delete {{label}}? The file is removed from disk.").
+		Verb("archive", c.on(c.archiveDoc(false)), "Move a doc to ROOT/.archive, keeping its relative path").
+		Verb("restore", c.on(c.archiveDoc(true)), "Move an archived doc back to its original path").
 		Verb("copy-path", c.on(c.copyPath), "Copy the doc's path to the clipboard and answer it").
 		Verb("notes", c.on(c.notes), "The doc's notes: JSON records, or with --format prompt one message for an agent").Fetch().
 		Verb("note", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
@@ -133,7 +139,8 @@ func (c *catalogApp) define() {
 		Mode("normal").
 		Bind("g s", ochazuke.Do(docNoun+".send-notes"))
 	params := map[string]map[string]ochazuke.Parameter{
-		"list": {"root": {Type: "string", Description: "More roots to walk (" + string(os.PathListSeparator) + " or , between)"}},
+		"list": {"root": {Type: "string", Description: "More roots to walk (" + string(os.PathListSeparator) + " or , between)"},
+			"archived": {Type: "boolean", Description: "List only archived documents"}},
 		"new": {"name": {Type: "string", Description: "The doc's name (its file NAME.md); none is untitled-TIME"},
 			"root": {Type: "string", Description: "The directory it goes in; default the first docs root"}},
 		"rename": {"to": {Type: "string", Required: true, Description: "The new name (same directory) or path"}},
@@ -248,15 +255,27 @@ func (c *catalogApp) listDocs(ctx ochazuke.Ctx) ochazuke.Result {
 			rows = append(rows, row)
 		}
 	}
+	archived, _ := ctx.Args["archived"].(bool)
+	withArchived := archived || !c.r.Settings().Bool("docs.hide-archived")
 	for _, root := range c.roots(ochazuke.StringArg(ctx.Args, "root", "")) {
-		walkMarkdown(root, func(p string) { add(root, p) })
+		if !archived {
+			walkMarkdown(root, func(p string) { add(root, p) })
+		}
+		if withArchived {
+			walkMarkdown(filepath.Join(root, ".archive"), func(p string) { add(root, p) })
+		}
 	}
 	for _, dir := range projectDirs() {
-		matches, _ := filepath.Glob(filepath.Join(dir, "*.md"))
-		for _, p := range matches {
-			add(dir, p)
+		if !archived {
+			matches, _ := filepath.Glob(filepath.Join(dir, "*.md"))
+			for _, p := range matches {
+				add(dir, p)
+			}
+			walkMarkdown(filepath.Join(dir, "docs"), func(p string) { add(dir, p) })
 		}
-		walkMarkdown(filepath.Join(dir, "docs"), func(p string) { add(dir, p) })
+		if withArchived {
+			walkMarkdown(filepath.Join(dir, ".archive"), func(p string) { add(dir, p) })
+		}
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].Modified != rows[j].Modified {
@@ -428,6 +447,34 @@ func (c *catalogApp) renameDoc(path string, args ochazuke.Arguments) (any, error
 		return nil, err
 	}
 	return c.rowOf(c.rootOf(dest), dest)
+}
+
+func (c *catalogApp) archiveDoc(restore bool) func(string, ochazuke.Arguments) (any, error) {
+	return func(path string, _ ochazuke.Arguments) (any, error) {
+		root := c.rootOf(path)
+		inArchive := false
+		for dir := filepath.Dir(path); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+			if filepath.Base(dir) == ".archive" {
+				root, inArchive = filepath.Dir(dir), true
+				break
+			}
+		}
+		if restore && !inArchive {
+			return nil, errors.New("restore needs a document under .archive")
+		}
+		if !restore && inArchive {
+			return c.rowOf(root, path)
+		}
+		from, to := root, filepath.Join(root, ".archive")
+		if restore {
+			from, to = to, from
+		}
+		rel, err := filepath.Rel(from, path)
+		if err != nil {
+			return nil, err
+		}
+		return c.renameDoc(path, ochazuke.Arguments{"to": filepath.Join(to, rel)})
+	}
 }
 
 func (c *catalogApp) deleteDoc(path string, _ ochazuke.Arguments) (any, error) {
