@@ -91,8 +91,9 @@ MCP gateway as `md.doc.*`:
 ```sh
 o md doc list [--root DIR] [--archived]
 o md doc new [--name NAME] [--root DIR]
-o md doc show|delete|archive|restore|copy-path --target PATH
-o md doc rename --target PATH --to NAME
+o md doc show|get|delete|archive|copy-path --target PATH
+o md doc set --target PATH --props '{"@label": "NEW"}'       # rename the file
+o md doc set --target PATH --props '{"@archive": false}'    # restore it from .archive
 o md doc notes|note|check|uncheck|send-notes --target PATH ...
 o md doc --help                  # every verb and its parameters
 ```
@@ -103,7 +104,7 @@ o md doc --help                  # every verb and its parameters
 host's project directories (`$MTM_PROJECT_DIRS`: each one's top-level `*.md`
 and `docs/**/*.md`). Rows show title, root, modified time, open tasks and open
 notes. `doc archive` moves a file to `<root>/.archive/<relative path>` and
-`doc restore` moves it back. Both refuse to overwrite an existing file.
+`set` with `@archive` false moves it back (what `doc restore` was). Both refuse to overwrite an existing file.
 The default list skips `.archive`; `--archived` lists only archived files.
 Set `docs.hide-archived` to `false` to include them in the normal list.
 `doc delete` remains available to the owner with confirmation and carries

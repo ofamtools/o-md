@@ -23,8 +23,8 @@ import (
 
 // The catalog: o-md as a family extension. Noun doc lists the Markdown
 // files under the docs roots (rows: title, path, root, modified,
-// open_tasks, open_notes) and acts on one (--target PATH): new, rename,
-// delete, archive, restore, copy-path, show, notes, note, check, uncheck and send-notes. The
+// open_tasks, open_notes) and acts on one (--target PATH): new, set (rename,
+// archive and restore are its @label and @archive), delete, archive, copy-path, show, notes, note, check, uncheck and send-notes. The
 // Docs page (docsPage) is a split of the docs list beside a markdown
 // detail (detail kind markdown, pathField path): a host that registers
 // the kind (mtm, markdown/cliview) draws the selected file as an editable
@@ -119,14 +119,10 @@ func (c *catalogApp) define() {
 	// ochazuke.pane, and mtm's pane chooser answers it. It has no verbs
 	// here, so a host mounts nothing for it.
 	r.DefineOwn(paneNoun)
-	r.Define(docNoun).Columns(docColumns...).
+	r.Define(docNoun).Columns(docColumns...).Props(docProps()...).Store(c.docStore()).
 		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md)").Rows(docNoun).Fetch().Quiet().
 		Verb("show", c.on(c.showDoc), "Show one doc's row").Fetch().
 		Verb("new", c.newDoc, "Create a doc: NAME.md under ROOT (default the first docs root), a heading of its name; no name is an untitled doc").Positional("name", "root").
-		Verb("rename", c.on(c.renameDoc), "Rename a doc's file: TO is a new name in the same directory, or a path").Positional("to").
-		Verb("delete", c.on(c.deleteDoc), "Delete a doc's file").Destructive().Confirm("Delete {{label}}? The file is removed from disk.").
-		Verb("archive", c.on(c.archiveDoc(false)), "Move a doc to ROOT/.archive, keeping its relative path").
-		Verb("restore", c.on(c.archiveDoc(true)), "Move an archived doc back to its original path").
 		Verb("copy-path", c.on(c.copyPath), "Copy the doc's path to the clipboard and answer it").
 		Verb("notes", c.on(c.notes), "The doc's notes: JSON records, or with --format prompt one message for an agent").Fetch().
 		Verb("note", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
@@ -143,7 +139,6 @@ func (c *catalogApp) define() {
 			"archived": {Type: "boolean", Description: "List only archived documents"}},
 		"new": {"name": {Type: "string", Description: "The doc's name (its file NAME.md); none is untitled-TIME"},
 			"root": {Type: "string", Description: "The directory it goes in; default the first docs root"}},
-		"rename": {"to": {Type: "string", Required: true, Description: "The new name (same directory) or path"}},
 		"notes": {"format": {Type: "string", Enum: []string{"jsonl", "prompt"}, Description: "jsonl (records, the default) or prompt"},
 			"item": {Type: "string", Description: "Only the notes under the first item holding this"}, "unresolved": {Type: "boolean"}, "unsent": {Type: "boolean"}},
 		"note": {"item": {Type: "string", Description: "Add a note under the first item holding this"}, "reply": {Type: "string", Description: "Reply to note ID"},
@@ -244,6 +239,16 @@ func splitList(s string) []string {
 // listDocs is doc list: every root's Markdown files (recursively), every
 // project directory's top-level *.md and docs/**/*.md, newest first.
 func (c *catalogApp) listDocs(ctx ochazuke.Ctx) ochazuke.Result {
+	archived, _ := ctx.Args["archived"].(bool)
+	withArchived := archived || !c.r.Settings().Bool("docs.hide-archived")
+	return ochazuke.Done(c.docRows(ochazuke.StringArg(ctx.Args, "root", ""), archived, withArchived))
+}
+
+// docRows are the doc rows doc list answers: every root's Markdown files
+// (recursively; extraRoots adds more), every project directory's
+// top-level *.md and docs/**/*.md, newest first. archivedOnly lists only
+// the archived ones, withArchived includes them.
+func (c *catalogApp) docRows(extraRoots string, archivedOnly, withArchived bool) []docRow {
 	seen := map[string]bool{}
 	var rows []docRow
 	add := func(root, path string) {
@@ -255,9 +260,8 @@ func (c *catalogApp) listDocs(ctx ochazuke.Ctx) ochazuke.Result {
 			rows = append(rows, row)
 		}
 	}
-	archived, _ := ctx.Args["archived"].(bool)
-	withArchived := archived || !c.r.Settings().Bool("docs.hide-archived")
-	for _, root := range c.roots(ochazuke.StringArg(ctx.Args, "root", "")) {
+	archived := archivedOnly
+	for _, root := range c.roots(extraRoots) {
 		if !archived {
 			walkMarkdown(root, func(p string) { add(root, p) })
 		}
@@ -286,7 +290,7 @@ func (c *catalogApp) listDocs(ctx ochazuke.Ctx) ochazuke.Result {
 	if rows == nil {
 		rows = []docRow{}
 	}
-	return ochazuke.Done(rows)
+	return rows
 }
 
 // walkMarkdown calls fn with every *.md file under root, skipping
@@ -373,27 +377,34 @@ func (c *catalogApp) showDoc(path string, _ ochazuke.Arguments) (any, error) {
 	return c.rowOf(c.rootOf(path), path)
 }
 
-// newDoc is doc new: record first, the file is made at once (a name
-// taken gets -2, -3, ...).
+// newDoc is doc new (and the standard create): record first, the file is
+// made at once (a name taken gets -2, -3, ...).
 func (c *catalogApp) newDoc(ctx ochazuke.Ctx) ochazuke.Result {
-	name := strings.TrimSpace(ochazuke.StringArg(ctx.Args, "name", ""))
+	row, err := c.makeDoc(ochazuke.StringArg(ctx.Args, "name", ""), ochazuke.StringArg(ctx.Args, "root", ""))
+	if err != nil {
+		return ochazuke.Failed(err)
+	}
+	return ochazuke.Done(row)
+}
+
+func (c *catalogApp) makeDoc(name, root string) (docRow, error) {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		name = "untitled-" + c.now().Format("20060102-150405")
 	}
 	if strings.ContainsRune(name, filepath.Separator) {
-		return ochazuke.Failed(fmt.Errorf("name %q: a name, not a path (pass root for the directory)", name))
+		return docRow{}, fmt.Errorf("name %q: a name, not a path (pass root for the directory)", name)
 	}
-	root := ochazuke.StringArg(ctx.Args, "root", "")
 	if root == "" {
 		roots := c.roots("")
 		if len(roots) == 0 {
-			return ochazuke.Failed(errors.New("no docs root: pass root or set " + rootsSetting))
+			return docRow{}, errors.New("no docs root: pass root or set " + rootsSetting)
 		}
 		root = roots[0]
 	}
 	dir, err := expand(root)
 	if err != nil {
-		return ochazuke.Failed(err)
+		return docRow{}, err
 	}
 	base := strings.TrimSuffix(name, ".md")
 	path := filepath.Join(dir, base+".md")
@@ -401,16 +412,12 @@ func (c *catalogApp) newDoc(ctx ochazuke.Ctx) ochazuke.Result {
 		path = filepath.Join(dir, fmt.Sprintf("%s-%d.md", base, n))
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return ochazuke.Failed(err)
+		return docRow{}, err
 	}
 	if err := markdown.WriteFile(path, "# "+base+"\n"); err != nil {
-		return ochazuke.Failed(err)
+		return docRow{}, err
 	}
-	row, err := c.rowOf(dir, path)
-	if err != nil {
-		return ochazuke.Failed(err)
-	}
-	return ochazuke.Done(row)
+	return c.rowOf(dir, path)
 }
 
 func (c *catalogApp) renameDoc(path string, args ochazuke.Arguments) (any, error) {
@@ -449,32 +456,25 @@ func (c *catalogApp) renameDoc(path string, args ochazuke.Arguments) (any, error
 	return c.rowOf(c.rootOf(dest), dest)
 }
 
-func (c *catalogApp) archiveDoc(restore bool) func(string, ochazuke.Arguments) (any, error) {
-	return func(path string, _ ochazuke.Arguments) (any, error) {
-		root := c.rootOf(path)
-		inArchive := false
-		for dir := filepath.Dir(path); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
-			if filepath.Base(dir) == ".archive" {
-				root, inArchive = filepath.Dir(dir), true
-				break
-			}
-		}
-		if restore && !inArchive {
-			return nil, errors.New("restore needs a document under .archive")
-		}
-		if !restore && inArchive {
-			return c.rowOf(root, path)
-		}
-		from, to := root, filepath.Join(root, ".archive")
-		if restore {
-			from, to = to, from
-		}
-		rel, err := filepath.Rel(from, path)
-		if err != nil {
-			return nil, err
-		}
-		return c.renameDoc(path, ochazuke.Arguments{"to": filepath.Join(to, rel)})
+// moveToArchive moves a doc to ROOT/.archive (keeping its relative path),
+// or, with restore, back; a move that is already done answers the row.
+func (c *catalogApp) moveToArchive(path string, restore bool) (any, error) {
+	root, inArchive := c.archiveRoot(path)
+	if restore && !inArchive {
+		return nil, errors.New("restore needs a document under .archive")
 	}
+	if !restore && inArchive {
+		return c.rowOf(root, path)
+	}
+	from, to := root, filepath.Join(root, ".archive")
+	if restore {
+		from, to = to, from
+	}
+	rel, err := filepath.Rel(from, path)
+	if err != nil {
+		return nil, err
+	}
+	return c.renameDoc(path, ochazuke.Arguments{"to": filepath.Join(to, rel)})
 }
 
 func (c *catalogApp) deleteDoc(path string, _ ochazuke.Arguments) (any, error) {

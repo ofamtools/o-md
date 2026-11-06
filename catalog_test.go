@@ -148,10 +148,10 @@ func TestDocVerbs(t *testing.T) {
 	if err := json.Unmarshal([]byte(mustShell(t, "doc", "new")), &row); err != nil || !strings.HasPrefix(filepath.Base(row.Path), "untitled-") || filepath.Dir(row.Path) != root {
 		t.Fatalf("new untitled %+v %v", row, err)
 	}
-	if err := json.Unmarshal([]byte(mustShell(t, "doc", "rename", "roadmap", "--target", filepath.Join(root, "Road map.md"))), &row); err != nil || row.Path != filepath.Join(root, "roadmap.md") {
+	if err := json.Unmarshal([]byte(mustShell(t, "doc", "set", "--props", `{"@label":"roadmap"}`, "--target", filepath.Join(root, "Road map.md"))), &row); err != nil || row.Path != filepath.Join(root, "roadmap.md") {
 		t.Fatalf("rename %+v %v", row, err)
 	}
-	if _, err := shell(t, "doc", "rename", "roadmap", "--target", filepath.Join(root, "Road map-2.md")); err == nil {
+	if _, err := shell(t, "doc", "set", "--props", `{"@label":"roadmap"}`, "--target", filepath.Join(root, "Road map-2.md")); err == nil {
 		t.Fatal("rename over an existing file")
 	}
 	if err := json.Unmarshal([]byte(mustShell(t, "doc", "show", "--target", row.Path)), &row); err != nil || row.Title != "Road map" {
@@ -207,13 +207,13 @@ func TestDocArchiveRoundTrip(t *testing.T) {
 			// Retrying archive is harmless; restoring must not replace a new file.
 			mustShell(t, "doc", "archive", "--target", dest)
 			writeFile(t, path, "# Replacement\n")
-			if _, err := shell(t, "doc", "restore", "--target", dest); err == nil || read(t, path) != "# Replacement\n" || read(t, dest) != before {
+			if _, err := shell(t, "doc", "set", "--props", `{"@archive":false}`, "--target", dest); err == nil || read(t, path) != "# Replacement\n" || read(t, dest) != before {
 				t.Fatalf("restore overwrote a file: %v", err)
 			}
 			if err := os.Remove(path); err != nil {
 				t.Fatal(err)
 			}
-			mustShell(t, "doc", "restore", "--target", dest)
+			mustShell(t, "doc", "set", "--props", `{"@archive":false}`, "--target", dest)
 			if exists(dest) || read(t, path) != before || listRows(t)[filepath.Base(path)].Path != path {
 				t.Fatal("restore did not recover the document")
 			}
@@ -230,8 +230,9 @@ func TestDocArchiveCollision(t *testing.T) {
 	if _, err := shell(t, "doc", "archive", "--target", path); err == nil || read(t, dest) != "# Earlier archive\n" || read(t, path) != before {
 		t.Fatalf("archive overwrote a file: %v", err)
 	}
-	if _, err := shell(t, "doc", "restore", "--target", path); err == nil || read(t, path) != before {
-		t.Fatalf("restored a live document: %v", err)
+	// Un-archiving a live document changes nothing.
+	if _, err := shell(t, "doc", "set", "--props", `{"@archive":false}`, "--target", path); err != nil || read(t, path) != before {
+		t.Fatalf("un-archived a live document: %v", err)
 	}
 }
 
@@ -243,14 +244,17 @@ func TestDocArchiveAttribution(t *testing.T) {
 	}
 	actor := ochazuke.Actor{Kind: ochazuke.ActorAgent, Name: "archive-test", Harness: "codex", Session: "fixture"}
 	path := filepath.Join(root, "plan.md")
-	for _, step := range []struct{ verb, path string }{
-		{"archive", path},
-		{"restore", filepath.Join(root, ".archive", "plan.md")},
+	for _, step := range []struct {
+		verb, path string
+		args       ochazuke.Arguments
+	}{
+		{"archive", path, nil},
+		{"set", filepath.Join(root, ".archive", "plan.md"), ochazuke.Arguments{"props": map[string]any{"@archive": false}}}, // the old restore
 	} {
 		if err := c.reveal(step.path); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := c.r.Execute(ochazuke.Request{Noun: docNoun, Verb: step.verb, Target: step.path, Actor: &actor}); err != nil {
+		if _, err := c.r.Execute(ochazuke.Request{Noun: docNoun, Verb: step.verb, Target: step.path, Args: step.args, Actor: &actor}); err != nil {
 			t.Fatal(err)
 		}
 		entry := c.r.History(1)[0]
@@ -312,7 +316,7 @@ func TestCatalog(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"check", "copy-path", "delete", "list", "new", "note", "notes", "rename", "send-notes", "show", "uncheck"} {
+	for _, want := range []string{"check", "copy-path", "delete", "list", "new", "note", "notes", "send-notes", "show", "uncheck"} {
 		if !strings.Contains(" "+strings.Join(verbs, " ")+" ", " "+want+" ") {
 			t.Fatalf("verb %s missing: %v", want, verbs)
 		}
