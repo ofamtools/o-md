@@ -6,7 +6,6 @@ catalog.go	isShellCommand	case	"bindings"	1
 catalog.go	isShellCommand	case	"doc"	1
 catalog.go	isShellCommand	case	"history"	1
 catalog.go	isShellCommand	case	"operations"	1
-catalog.go	isShellCommand	case	"settings"	1
 catalog.go	targetPath	compare	"doc"	1
 cli.go	cmdNotes	case	"prompt"	1
 main.go	run	case	"check"	1

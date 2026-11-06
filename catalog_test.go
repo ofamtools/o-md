@@ -101,7 +101,7 @@ func TestDocList(t *testing.T) {
 	// docs.roots from the settings when $O_MD_ROOTS is unset; --root adds.
 	os.Unsetenv("O_MD_ROOTS")
 	t.Setenv("MTM_PROJECT_DIRS", "")
-	mustShell(t, "settings", "set", rootsSetting, `["`+filepath.Join(root, "deep")+`"]`, "--yes")
+	mustShell(t, "setting", "set", "--scope", "file", rootsSetting, `["`+filepath.Join(root, "deep")+`"]`, "--yes")
 	rows = listRows(t)
 	if len(rows) != 1 || rows["notes.md"].Path == "" {
 		t.Fatalf("settings roots: %v", rows)
@@ -199,11 +199,11 @@ func TestDocArchiveRoundTrip(t *testing.T) {
 			if err := json.Unmarshal([]byte(mustShell(t, "doc", "list", "--archived")), &rows); err != nil || len(rows) != 1 || rows[0].Path != dest {
 				t.Fatalf("archived list: %+v %v", rows, err)
 			}
-			mustShell(t, "settings", "set", "docs.hide-archived", "false", "--yes")
+			mustShell(t, "setting", "set", "--scope", "file", "docs.hide-archived", "false", "--yes")
 			if got := listRows(t)[filepath.Base(path)].Path; got != dest {
 				t.Fatalf("archive hiding opt-out: %s", got)
 			}
-			mustShell(t, "settings", "set", "docs.hide-archived", "true", "--yes")
+			mustShell(t, "setting", "set", "--scope", "file", "docs.hide-archived", "true", "--yes")
 			// Retrying archive is harmless; restoring must not replace a new file.
 			mustShell(t, "doc", "archive", "--target", dest)
 			writeFile(t, path, "# Replacement\n")
