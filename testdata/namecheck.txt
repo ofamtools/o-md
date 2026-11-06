@@ -1,0 +1,19 @@
+# namecheck baseline: file, function, kind, literal, count, reason (tab separated).
+# A row with a reason is a legitimate use that stays. A row without one is debt that may only shrink:
+# NAMECHECK_UPDATE=1 removes rows and lowers counts, never adds them. Adding a row is a reviewed edit.
+catalog.go	catalogApp.notes	case	"prompt"	1
+catalog.go	isShellCommand	case	"bindings"	1
+catalog.go	isShellCommand	case	"doc"	1
+catalog.go	isShellCommand	case	"history"	1
+catalog.go	isShellCommand	case	"operations"	1
+catalog.go	isShellCommand	case	"settings"	1
+catalog.go	targetPath	compare	"doc"	1
+cli.go	cmdNotes	case	"prompt"	1
+main.go	run	case	"check"	1
+main.go	run	case	"help"	1
+main.go	run	case	"note"	1
+main.go	run	case	"notes"	1
+main.go	run	case	"send"	1
+main.go	run	case	"uncheck"	1
+main.go	run	compare	"check"	1
+notes.go	isOwner	compare	"owner"	1
