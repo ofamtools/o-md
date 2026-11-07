@@ -378,12 +378,12 @@ func TestGSSendsNotes(t *testing.T) {
 	press(t, a, "]", "x", "n")
 	typeText(t, a, "keep a trash view")
 	press(t, a, "esc")
-	hints := ochazuke.BindingHints(a.r, a.r.Focus)
+	hints := ochazuke.BindingHints(a.r, a.r.FocusID())
 	if !strings.Contains(hints, "g s doc.send-notes") || strings.Contains(hints, "S doc.send-notes") {
 		t.Fatalf("hints %q: want g s hinted, S not", hints)
 	}
 	var keys []string
-	for _, row := range ochazuke.BindingHelp(a.r, a.r.Focus) {
+	for _, row := range ochazuke.BindingHelp(a.r, a.r.FocusID()) {
 		if row.Operation == "doc.send-notes" {
 			keys = append(keys, row.Key)
 		}
