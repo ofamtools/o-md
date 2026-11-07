@@ -363,7 +363,7 @@ func TestPaletteSaveAs(t *testing.T) {
 	}
 }
 
-// g s sends the notes in standalone o-md: it opens the agent chooser and
+// g s sends the notes in standalone o-md: it opens the agent picker and
 // enter queues the notes through tuios (a fake here). g s is the hinted
 // key; S stays bound, and ? help lists both.
 func TestGSSendsNotes(t *testing.T) {
@@ -395,7 +395,7 @@ func TestGSSendsNotes(t *testing.T) {
 	settle(t, a, a.r.PendingCommands())
 	top := a.r.Instances[a.r.TopModal()]
 	if top == nil {
-		t.Fatalf("g s opened no chooser; status %q", a.m.Status)
+		t.Fatalf("g s opened no picker; status %q", a.m.Status)
 	}
 	press(t, a, "enter")
 	settle(t, a, a.r.PendingCommands())

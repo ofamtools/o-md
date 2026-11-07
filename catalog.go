@@ -108,6 +108,9 @@ func newCatalogApp() (*catalogApp, error) {
 	if err := ocli.DeclarePage(r, docsPage()); err != nil {
 		return nil, err
 	}
+	if err := declarePickers(r); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -116,7 +119,7 @@ func (c *catalogApp) define() {
 	r := c.r
 	// pane names the host's panes (send-notes' parameter): o-md owns the
 	// short name, so the catalog writes "pane", not the framework's
-	// ochazuke.pane, and mtm's pane chooser answers it. It has no verbs
+	// ochazuke.pane, and mtm's pane picker answers it. It has no verbs
 	// here, so a host mounts nothing for it.
 	r.DefineOwn(paneNoun)
 	r.Define(docNoun).Columns(docColumns...).Props(docProps()...).Store(c.docStore()).
@@ -131,7 +134,7 @@ func (c *catalogApp) define() {
 		Verb("send-notes", c.on(c.sendNotes), "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent").Positional("pane").
 		// The catalog's key row: a host mounting the Docs page answers g s
 		// on the doc list and in the markdown detail, and asks for the pane
-		// (a noun-typed parameter) with its own chooser.
+		// (a noun-typed parameter) with its own picker.
 		Mode("normal").
 		Bind("g s", ochazuke.Do(docNoun+".send-notes"))
 	params := map[string]map[string]ochazuke.Parameter{

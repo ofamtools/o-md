@@ -119,7 +119,7 @@ func (a *App) register() {
 	for verb, params := range map[string]map[string]ochazuke.Parameter{
 		"save-as":    {"path": {Type: "string", Required: true, Description: "Where to write the buffer (~ is your home)"}, "force": {Type: "boolean", Description: "Overwrite an existing file"}},
 		"w":          {"path": {Type: "string", Required: true}, "force": {Type: "boolean"}},
-		"send-notes": {"pane": {Type: "string", Description: "The tuios pane (id or name); none opens a chooser"}},
+		"send-notes": {"pane": {Type: "string", Description: "The tuios pane (id or name); none opens a picker"}},
 	} {
 		op := a.r.Operations[docNoun+"."+verb]
 		op.Parameters = params
@@ -147,7 +147,7 @@ func expand(path string) (string, error) {
 }
 
 // saveAs names the buffer path: an existing file is overwritten only
-// once confirmed (a chooser asks).
+// once confirmed (a picker asks).
 func (a *App) saveAs(path string, force bool) error {
 	if strings.TrimSpace(path) == "" {
 		return errors.New("save-as needs a PATH")
@@ -160,10 +160,10 @@ func (a *App) saveAs(path string, force bool) error {
 		return nil
 	}
 	if exists(abs) && !force {
-		_, err := a.r.OpenChooser(ochazuke.ChooserSpec{Kind: "o-md-overwrite", Title: abs + " exists: overwrite it?", Rows: []ochazuke.ChooserRow{
+		_, err := a.r.OpenPicker(ochazuke.PickerSpec{Kind: "o-md-overwrite", Title: abs + " exists: overwrite it?", Rows: []ochazuke.PickerRow{
 			{ID: "overwrite", Label: "overwrite " + filepath.Base(abs)},
 			{ID: "cancel", Label: "cancel"},
-		}, Choose: func(row ochazuke.ChooserRow) ochazuke.Result {
+		}, Choose: func(row ochazuke.PickerRow) ochazuke.Result {
 			if row.ID != "overwrite" {
 				return ochazuke.Done(nil)
 			}
@@ -215,12 +215,12 @@ func (a *App) sendNotes(pane string) ochazuke.Result {
 			c.Runtime.UI().Status("no tuios agent panes")
 			return
 		}
-		rows := make([]ochazuke.ChooserRow, len(list))
+		rows := make([]ochazuke.PickerRow, len(list))
 		for i, ag := range list {
-			rows[i] = ochazuke.ChooserRow{ID: ag.ID, Label: ag.Name + " " + ag.Harness + " " + ag.State, Data: ag.ID,
+			rows[i] = ochazuke.PickerRow{ID: ag.ID, Label: ag.Name + " " + ag.Harness + " " + ag.State, Data: ag.ID,
 				Cells: []string{ag.Name, ag.Harness, ag.State, ag.Session, ag.Cwd}}
 		}
-		if _, err := c.Runtime.OpenChooser(ochazuke.ChooserSpec{Kind: "o-md-agents", Title: "Send notes to", Rows: rows, Choose: func(row ochazuke.ChooserRow) ochazuke.Result {
+		if _, err := c.Runtime.OpenPicker(ochazuke.PickerSpec{Kind: "o-md-agents", Title: "Send notes to", Rows: rows, Choose: func(row ochazuke.PickerRow) ochazuke.Result {
 			id, _ := row.Data.(string)
 			return a.send(id)
 		}}); err != nil {
