@@ -339,11 +339,9 @@ func agents() ([]agent, error) {
 	return doc.Agents, nil
 }
 
-// deliver types prompt into the agent's pane with mtm pane send-text (a
-// paste, then enter). The daemon refuses a pane blocked on a prompt, so it is
-// never typed over a question the agent waits on; unlike the older queue it
-// does not wait for the agent to come to rest. With now, a pane that is not at
-// rest refuses before anything is sent.
+// deliver queues prompt for the agent in pane with mtm agent enqueue: typed
+// when the agent is at rest, never over a prompt it waits on. With now, a
+// pane that is not at rest refuses instead of queueing.
 func deliver(pane, prompt string, now bool) error {
 	session, window := "", pane
 	list, err := agents()
@@ -358,16 +356,16 @@ func deliver(pane, prompt string, now bool) error {
 			}
 		}
 	}
-	argv := []string{"pane", "send-text", "--window", window}
+	argv := []string{"agent", "enqueue", "--window", window}
 	if session != "" {
 		argv = append(argv, "--session", session)
 	}
-	argv = append(argv, "--paste", "--submit", "--text", prompt)
+	argv = append(argv, "--text", prompt)
 	cmd := exec.Command(mtm(), argv...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("mtm pane send-text: %v: %s", err, strings.TrimSpace(stderr.String()))
+		return fmt.Errorf("mtm agent enqueue: %v: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return nil
 }

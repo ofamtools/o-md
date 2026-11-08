@@ -281,7 +281,7 @@ func TestDocSendNotes(t *testing.T) {
 	if err := json.Unmarshal([]byte(mustShell(t, "doc", "send-notes", "p1", "--target", path)), &sent); err != nil || sent["sent"] != float64(1) {
 		t.Fatalf("send %v %v", sent, err)
 	}
-	if log := read(t, logf); !strings.HasPrefix(log, "pane send-text --window p1 --session s --paste --submit --text Notes on") || !strings.Contains(log, "per task") {
+	if log := read(t, logf); !strings.HasPrefix(log, "agent enqueue --window p1 --session s --text Notes on") || !strings.Contains(log, "per task") {
 		t.Fatalf("queued %q", log)
 	}
 	if !strings.Contains(read(t, path), "· sent: per task") {

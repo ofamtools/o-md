@@ -233,7 +233,7 @@ func TestSend(t *testing.T) {
 	if _, err := cli(t, "send", path, "--pane", "p1"); err != nil {
 		t.Fatal(err)
 	}
-	if log := read(t, logf); !strings.HasPrefix(log, "pane send-text --window p1 --session s --paste --submit --text Notes on") || !strings.Contains(log, "keep a trash view") {
+	if log := read(t, logf); !strings.HasPrefix(log, "agent enqueue --window p1 --session s --text Notes on") || !strings.Contains(log, "keep a trash view") {
 		t.Fatalf("queued %q", log)
 	}
 	if !strings.Contains(read(t, path), "· sent: keep a trash view") {
@@ -399,7 +399,7 @@ func TestGSSendsNotes(t *testing.T) {
 	}
 	press(t, a, "enter")
 	settle(t, a, a.r.PendingCommands())
-	if log := read(t, logf); !strings.HasPrefix(log, "pane send-text --window p1 --session s --paste --submit --text Notes on") || !strings.Contains(log, "keep a trash view") {
+	if log := read(t, logf); !strings.HasPrefix(log, "agent enqueue --window p1 --session s --text Notes on") || !strings.Contains(log, "keep a trash view") {
 		t.Fatalf("queued %q", log)
 	}
 	if !strings.Contains(read(t, path), "· sent: keep a trash view") {
