@@ -108,7 +108,6 @@ func (a *App) register() {
 	a.r.Define(docNoun).
 		Verb("save-as", saveAs, "Name the buffer: write it to PATH (parent directories made) and keep editing there; a scratch buffer's file moves, a named file stays where it was. An existing PATH asks first").Positional("path").
 		Verb("w", saveAs, "Save as (vim's :w PATH)").Positional("path").
-		Verb("path", func(c ochazuke.Ctx) ochazuke.Result { return ochazuke.Done(a.path) }, "The file the buffer is written to").
 		Verb("send-notes", func(c ochazuke.Ctx) ochazuke.Result { return a.sendNotes(ochazuke.StringArg(c.Args, "pane", "")) }, "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent; without a pane, choose one").Positional("pane").
 		Mode("normal").
 		// g s is the hinted key (the footer shows a request's first row);
@@ -125,6 +124,11 @@ func (a *App) register() {
 		op.Parameters = params
 		a.r.Operations.Set(op)
 	}
+	// The buffer is one thing; the file it is written to is its path prop.
+	a.r.Define(docNoun).Props(ochazuke.PropSpec{Name: "path", ReadOnly: true,
+		Parameter: ochazuke.Parameter{Type: ochazuke.SettingString, Description: "The file the buffer is written to"},
+		Read:      func(ochazuke.Ctx, ochazuke.Thing) (any, error) { return a.path, nil }}).
+		Store(ochazuke.Store{Kind: ochazuke.Singleton, Facts: true, Get: func(ochazuke.Ctx, string) (ochazuke.Thing, error) { return ochazuke.Thing{}, nil }})
 	a.r.Define(agentNoun)
 }
 

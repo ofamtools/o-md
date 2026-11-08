@@ -68,7 +68,7 @@ func (c *catalogApp) docThing(path string) (ochazuke.Thing, error) {
 
 func (c *catalogApp) docStore() ochazuke.Store {
 	return ochazuke.Store{
-		Kind: ochazuke.Collection,
+		Kind: ochazuke.KindCollection,
 		Get: func(_ ochazuke.Ctx, id string) (ochazuke.Thing, error) {
 			path, err := expand(id)
 			if err != nil {

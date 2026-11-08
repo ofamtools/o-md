@@ -24,7 +24,7 @@ import (
 // The catalog: o-md as a family extension. Noun doc lists the Markdown
 // files under the docs roots (rows: title, path, root, modified,
 // open_tasks, open_notes) and acts on one (--target PATH): new, set (rename,
-// archive and restore are its @label and @archive), delete, archive, copy-path, show, notes, note, check, uncheck and send-notes. The
+// archive and restore are its @label and @archive), delete, archive, yank-path, show, notes, annotate, check, uncheck and send-notes. The
 // Docs page (docsPage) is a split of the docs list beside a markdown
 // detail (detail kind markdown, pathField path): a host that registers
 // the kind (mtm, markdown/cliview) draws the selected file as an editable
@@ -83,7 +83,7 @@ type docRow struct {
 // catalogApp is the runtime the command line runs the doc verbs on.
 type catalogApp struct {
 	r    *ochazuke.Runtime
-	list *ochazuke.List
+	list *ochazuke.Collection
 	now  func() time.Time
 }
 
@@ -126,9 +126,9 @@ func (c *catalogApp) define() {
 		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md)").Rows(docNoun).Fetch().Quiet().
 		Verb("show", c.on(c.showDoc), "Show one doc's row").Fetch().
 		Verb("new", c.newDoc, "Create a doc: NAME.md under ROOT (default the first docs root), a heading of its name; no name is an untitled doc").Positional("name", "root").
-		Verb("copy-path", c.on(c.copyPath), "Copy the doc's path to the clipboard and answer it").
+		Verb("yank-path", c.on(c.yankPath), "Copy the doc's path to the clipboard and answer it").
 		Verb("notes", c.on(c.notes), "The doc's notes: JSON records, or with --format prompt one message for an agent").Fetch().
-		Verb("note", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
+		Verb("annotate", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
 		Verb("check", c.on(c.check(true)), "Check the first checklist item holding ITEM").Positional("item").
 		Verb("uncheck", c.on(c.check(false)), "Uncheck the first checklist item holding ITEM").Positional("item").
 		Verb("send-notes", c.on(c.sendNotes), "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent").Positional("pane").
@@ -144,7 +144,7 @@ func (c *catalogApp) define() {
 			"root": {Type: "string", Description: "The directory it goes in; default the first docs root"}},
 		"notes": {"format": {Type: "string", Enum: []string{"jsonl", "prompt"}, Description: "jsonl (records, the default) or prompt"},
 			"item": {Type: "string", Description: "Only the notes under the first item holding this"}, "unresolved": {Type: "boolean"}, "unsent": {Type: "boolean"}},
-		"note": {"item": {Type: "string", Description: "Add a note under the first item holding this"}, "reply": {Type: "string", Description: "Reply to note ID"},
+		"annotate": {"item": {Type: "string", Description: "Add a note under the first item holding this"}, "reply": {Type: "string", Description: "Reply to note ID"},
 			"edit": {Type: "string", Description: "Replace note ID's text"}, "resolve": {Type: "string"}, "unresolve": {Type: "string"}, "delete": {Type: "string"},
 			"text": {Type: "string", Description: "The note's text (add, reply, edit)"}, "author": {Type: "string", Description: "Sign as this name (self-declared); an agent may not sign as the owner"}},
 		"check":   {"item": {Type: "string", Required: true}},
@@ -489,7 +489,7 @@ func (c *catalogApp) deleteDoc(path string, _ ochazuke.Arguments) (any, error) {
 
 // copyPath copies the path with the platform's clipboard command when
 // there is one and answers it either way.
-func (c *catalogApp) copyPath(path string, _ ochazuke.Arguments) (any, error) {
+func (c *catalogApp) yankPath(path string, _ ochazuke.Arguments) (any, error) {
 	return map[string]any{"path": path, "copied": copyToClipboard(path) == nil}, nil
 }
 

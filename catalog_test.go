@@ -109,15 +109,15 @@ func TestDocList(t *testing.T) {
 }
 
 // The verbs act on --target PATH: note, notes, check, uncheck, new,
-// rename, show, delete (confirmed), copy-path.
+// rename, show, delete (confirmed), yank-path.
 func TestDocVerbs(t *testing.T) {
 	root, _ := docEnv(t)
 	path := filepath.Join(root, "plan.md")
 	var added map[string]string
-	if err := json.Unmarshal([]byte(mustShell(t, "doc", "note", "--target", path, "--json", `{"item":"archive","text":"keep a trash view"}`)), &added); err != nil || added["id"] == "" {
+	if err := json.Unmarshal([]byte(mustShell(t, "doc", "annotate", "--target", path, "--json", `{"item":"archive","text":"keep a trash view"}`)), &added); err != nil || added["id"] == "" {
 		t.Fatalf("note: %v %v", added, err)
 	}
-	mustShell(t, "doc", "note", "--target", path, "--json", `{"reply":"`+added["id"]+`","text":"agreed"}`)
+	mustShell(t, "doc", "annotate", "--target", path, "--json", `{"reply":"`+added["id"]+`","text":"agreed"}`)
 	var notes []noteRecord
 	if err := json.Unmarshal([]byte(mustShell(t, "doc", "notes", "--target", path)), &notes); err != nil || len(notes) != 2 || notes[0].Author != "josh" {
 		t.Fatalf("notes %v %v", notes, err)
@@ -126,7 +126,7 @@ func TestDocVerbs(t *testing.T) {
 	if !strings.Contains(prompt, "keep a trash view") || !strings.Contains(prompt, "Notes on ") {
 		t.Fatalf("prompt %s", prompt)
 	}
-	mustShell(t, "doc", "note", "--target", path, "--json", `{"resolve":"`+added["id"]+`"}`)
+	mustShell(t, "doc", "annotate", "--target", path, "--json", `{"resolve":"`+added["id"]+`"}`)
 	if !strings.Contains(read(t, path), "keep a trash view") {
 		t.Fatal("a resolved note stays in the file")
 	}
@@ -166,8 +166,8 @@ func TestDocVerbs(t *testing.T) {
 	}
 	t.Setenv("O_MD_CLIPBOARD", "true")
 	var copied map[string]any
-	if err := json.Unmarshal([]byte(mustShell(t, "doc", "copy-path", "--target", path)), &copied); err != nil || copied["path"] != path || copied["copied"] != true {
-		t.Fatalf("copy-path %v %v", copied, err)
+	if err := json.Unmarshal([]byte(mustShell(t, "doc", "yank-path", "--target", path)), &copied); err != nil || copied["path"] != path || copied["copied"] != true {
+		t.Fatalf("yank-path %v %v", copied, err)
 	}
 }
 
@@ -272,7 +272,7 @@ func TestDocArchiveAttribution(t *testing.T) {
 func TestDocSendNotes(t *testing.T) {
 	root, _ := docEnv(t)
 	path := filepath.Join(root, "plan.md")
-	mustShell(t, "doc", "note", "--target", path, "--json", `{"item":"saved prompts","text":"per task"}`)
+	mustShell(t, "doc", "annotate", "--target", path, "--json", `{"item":"saved prompts","text":"per task"}`)
 	if _, err := shell(t, "doc", "send-notes", "--target", path); err == nil || !strings.Contains(err.Error(), "needs a pane") {
 		t.Fatalf("no pane: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestCatalog(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"check", "copy-path", "delete", "list", "new", "note", "notes", "send-notes", "show", "uncheck"} {
+	for _, want := range []string{"annotate", "check", "delete", "list", "new", "notes", "send-notes", "show", "uncheck"} {
 		if !strings.Contains(" "+strings.Join(verbs, " ")+" ", " "+want+" ") {
 			t.Fatalf("verb %s missing: %v", want, verbs)
 		}

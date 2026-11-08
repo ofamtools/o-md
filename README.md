@@ -91,10 +91,10 @@ MCP gateway as `md.doc.*`:
 ```sh
 o md doc list [--root DIR] [--archived]
 o md doc new [--name NAME] [--root DIR]
-o md doc show|get|delete|archive|copy-path --target PATH
+o md doc show|get|delete|archive|yank-path --target PATH
 o md doc set --target PATH --props '{"@label": "NEW"}'       # rename the file
 o md doc set --target PATH --props '{"@archive": false}'    # restore it from .archive
-o md doc notes|note|check|uncheck|send-notes --target PATH ...
+o md doc notes|annotate|check|uncheck|send-notes --target PATH ...
 o md doc --help                  # every verb and its parameters
 ```
 

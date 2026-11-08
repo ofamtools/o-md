@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Changed, breaking (lexicon, ochazuke v0.105.0, one shot, no aliases; every rename is in `docs/lexicon-renames-v0.105.tsv`): `doc note` is `doc annotate`, `doc copy-path` is `doc yank-path`, the editor's `doc path` verb is the `path` prop of the doc (`doc get --prop path`), `doc` is the main noun. The `o md note PATH` command is unchanged. `TestLexicon` runs with an empty baseline over both the catalog and the editor runtime.
 - Changed: requires ochazuke v0.102.0 and oden v0.3.0 (the Operations registry and three-part keys; `cmd/opname` moved the code). o-md declares its namespace, `md` (`ochazuke.DeclareNamespace`), so its keys are `md.<noun>.<verb>` and the catalog carries `namespace: md`. CLI spellings are unchanged.
 - Changed: doc is a thing noun with a store over the Markdown files (key: the path; label: the file name; archive role: lying under .archive). `doc delete` and `doc archive` are the standard verbs over it, `doc set` and `doc edit` write the name and the archive flag; `list`, `show` and `new` stay.
 - Removed: `doc rename` (use `doc set --props '{"@label": NEW}'`) and `doc restore` (use `doc set --props '{"@archive": false}'`); no aliases.

@@ -1,0 +1,5 @@
+kind	old	new	note
+operation	md.doc.note	md.doc.annotate	note is a noun; the verb is annotate
+operation	md.doc.copy-path	md.doc.yank-path	clipboard verbs are yank
+operation	md.doc.path (editor)	md.doc.get {prop: path}	read-only value verb of the editor's buffer is a prop of the singleton doc
+word	doc-page, save-as, w	(word list rows)	local rows in testdata/lexicon-words.tsv
