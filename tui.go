@@ -121,9 +121,9 @@ func (a *App) register() {
 		"w":          {"path": {Type: "string", Required: true}, "force": {Type: "boolean"}},
 		"send-notes": {"pane": {Type: "string", Description: "The tuios pane (id or name); none opens a picker"}},
 	} {
-		op := a.r.Operations[docNoun+"."+verb]
+		op := a.r.Operations.At(ochazuke.Key(docNoun + "." + verb))
 		op.Parameters = params
-		a.r.Operations[op.Key()] = op
+		a.r.Operations.Set(op)
 	}
 	a.r.Define(agentNoun)
 }

@@ -153,9 +153,9 @@ func (c *catalogApp) define() {
 			"now": {Type: "boolean", Description: "Refuse a pane that is not at rest instead of queueing"}, "item": {Type: "string", Description: "Only the notes under the first item holding this"}},
 	}
 	for verb, p := range params {
-		op := r.Operations[docNoun+"."+verb]
+		op := r.Operations.At(ochazuke.Key(docNoun + "." + verb))
 		op.Parameters = p
-		r.Operations[op.Key()] = op
+		r.Operations.Set(op)
 	}
 }
 
