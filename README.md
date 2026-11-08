@@ -58,14 +58,14 @@ $ cat plan.md
 o md note FILE --reply ID TEXT                     # answer note ID
 o md note FILE --edit ID TEXT | --resolve ID | --unresolve ID | --delete ID
 o md notes FILE [--item MATCH] [--unresolved] [--unsent] [--format jsonl|prompt]
-o md send FILE --pane ID [--now] [--dry-run]       # queue the open notes to an agent's tuios pane
+o md send FILE --pane ID [--now] [--dry-run]       # send the open notes to an agent's pane
 ```
 
-TEXT `-` reads stdin. A note's author is `--author`, else the agent tuios lists
+TEXT `-` reads stdin. A note's author is `--author`, else the agent mtm lists
 in `$TUIOS_PANE_ID`, else the owner (`$O_MD_OWNER`, else `$USER`); an agent may
 not sign as the owner, and only a note's author or the owner may edit, resolve
-or delete it. `send` uses `tuios queue`, so the prompt is typed when the agent
-is at rest; with `--now` a busy pane refuses instead. `--dry-run` prints the
+or delete it. `send` uses `mtm pane send-text` (a paste, then enter); the daemon refuses a pane
+blocked on a prompt, and with `--now` a pane that is not at rest refuses too. `--dry-run` prints the
 prompt without sending. Sent notes are marked so they are not sent twice.
 
 ### Editor keys
@@ -115,7 +115,7 @@ or newer refuse it for agents and name `doc.archive` instead.
 
 Scratch buffers live in `$O_MD_DATA`, else `$XDG_DATA_HOME/o-md`, else
 `~/.local/share/o-md`; `--data DIR` overrides it. Named files are edited where
-they are. `$O_MD_TUIOS` names another `tuios` bin (tests).
+they are. `$O_MD_MTM` names another `mtm` bin (tests).
 
 ## Build
 

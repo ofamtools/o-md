@@ -12,8 +12,8 @@ import (
 )
 
 // identity is who runs an agent command: the --author given (self
-// declared), else the tuios agent the command runs in ($TUIOS_PANE_ID,
-// when tuios list-agents lists an agent in that pane), else the owner
+// declared), else the agent the command runs in ($TUIOS_PANE_ID,
+// when mtm agent scan lists an agent in that pane), else the owner
 // ($O_MD_OWNER, else $USER). A pane that is not an agent's (a shell, mtm)
 // is the owner's. An agent may not declare itself the owner.
 func identity(flagAuthor string) (author string, declared bool, err error) {
@@ -30,8 +30,8 @@ func identity(flagAuthor string) (author string, declared bool, err error) {
 	return owner(), false, nil
 }
 
-// callerAgent is $TUIOS_PANE_ID when tuios lists an agent in that pane,
-// else "" (no pane, a pane without an agent, or tuios not answering).
+// callerAgent is $TUIOS_PANE_ID when mtm lists an agent in that pane,
+// else "" (no pane, a pane without an agent, or mtm not answering).
 func callerAgent() string {
 	pane := os.Getenv("TUIOS_PANE_ID")
 	if pane == "" {
@@ -67,7 +67,7 @@ func isOwner(name string) bool { return name == "owner" || name == owner() }
 var paneID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // selfDeclared reports whether a note's author is a name the system did
-// not set: neither the owner nor a tuios pane id.
+// not set: neither the owner nor a pane id.
 func selfDeclared(author string) bool { return !isOwner(author) && !paneID.MatchString(author) }
 
 // mayChange is the permission rule: the owner may change any note, anyone
@@ -123,7 +123,7 @@ func oneLine(s string, limit int) string {
 }
 
 // compose is the notes as one numbered message an agent can be sent
-// (modelled on tuios's review.Compose): per note its place, the item's
+// (modelled on the review compose of the older pane tool): per note its place, the item's
 // text and the note's id and line, who wrote it when that is not the
 // sender, then its text indented; one closing line asking for replies.
 func compose(file, src, from string, notes []markdown.Note) string {

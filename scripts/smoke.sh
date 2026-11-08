@@ -25,11 +25,11 @@ grep -q '^+  > \*\*owner\*\* [0-9-]*: a smoke note$' "$work/tui.diff" || fail "n
 [ "$(grep -v '^\(---\|+++\) ' "$work/tui.diff" | grep -c '^[-+]')" -eq 4 ] || fail "more lines changed than the edits"
 
 # 2. Agent commands: an agent (pane id) notes, the owner's note is not its to resolve.
-# A pane is an agent only when tuios lists one there: a fake tuios lists it.
+# A pane is an agent only when mtm lists one there: a fake mtm lists it.
 agent=11111111-2222-3333-4444-555555555555
-printf '#!/bin/sh\nif [ "$1" = list-agents ]; then echo '"'"'{"agents":[{"window_id":"%s","name":"smoke","state":"idle","ready":true,"session":"s"}]}'"'"'; fi\n' "$agent" > "$work/tuios"
-chmod +x "$work/tuios"
-export O_MD_TUIOS="$work/tuios"
+printf '#!/bin/sh\nif [ "$1 $2" = "agent scan" ]; then echo '"'"'{"agents":[{"window_id":"%s","name":"smoke","state":"idle","ready":true,"session":"s"}]}'"'"'; fi\n' "$agent" > "$work/mtm"
+chmod +x "$work/mtm"
+export O_MD_MTM="$work/mtm"
 id=$(TUIOS_PANE_ID=$agent "$bin" note "$copy" --item "Archive and restore" "started on the trash view")
 echo "agent note: $id"
 TUIOS_PANE_ID=$agent "$bin" notes "$copy" --item "Archive and restore" | tee "$work/notes.jsonl"

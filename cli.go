@@ -305,15 +305,15 @@ func checkItem(path, match string, check bool) error {
 	return markdown.WriteFile(path, src[:e.Box]+string(want)+src[e.Box+1:])
 }
 
-// tuios is the tuios command ($O_MD_TUIOS overrides it, for tests).
-func tuios() string {
-	if t := os.Getenv("O_MD_TUIOS"); t != "" {
+// mtm is the mtm command ($O_MD_MTM overrides it, for tests).
+func mtm() string {
+	if t := os.Getenv("O_MD_MTM"); t != "" {
 		return t
 	}
-	return "tuios"
+	return "mtm"
 }
 
-// agent is one tuios agent pane as list-agents reports it.
+// agent is one agent pane as mtm agent scan reports it.
 type agent struct {
 	ID      string `json:"window_id"`
 	Name    string `json:"name"`
@@ -324,48 +324,50 @@ type agent struct {
 	Cwd     string `json:"cwd"`
 }
 
-// agents lists the tuios agent panes of every session.
+// agents lists the agent panes of every session (mtm agent scan).
 func agents() ([]agent, error) {
-	out, err := exec.Command(tuios(), "list-agents", "--all-sessions", "--json").Output()
+	out, err := exec.Command(mtm(), "agent", "scan", "--all_sessions", "--json").Output()
 	if err != nil {
-		return nil, fmt.Errorf("tuios list-agents: %w", err)
+		return nil, fmt.Errorf("mtm agent scan: %w", err)
 	}
 	var doc struct {
 		Agents []agent `json:"agents"`
 	}
 	if err := json.Unmarshal(out, &doc); err != nil {
-		return nil, fmt.Errorf("tuios list-agents: %w", err)
+		return nil, fmt.Errorf("mtm agent scan: %w", err)
 	}
 	return doc.Agents, nil
 }
 
-// deliver queues prompt for the agent in pane with tuios queue: typed
-// when the agent is at rest, never over a prompt it waits on. With now,
-// a pane that is not at rest refuses instead of queueing.
+// deliver types prompt into the agent's pane with mtm pane send-text (a
+// paste, then enter). The daemon refuses a pane blocked on a prompt, so it is
+// never typed over a question the agent waits on; unlike the older queue it
+// does not wait for the agent to come to rest. With now, a pane that is not at
+// rest refuses before anything is sent.
 func deliver(pane, prompt string, now bool) error {
-	session := ""
+	session, window := "", pane
 	list, err := agents()
 	if err != nil && now {
 		return err
 	}
 	for _, a := range list {
 		if a.ID == pane || a.Name == pane {
-			session = a.Session
+			session, window = a.Session, a.ID
 			if now && !a.Ready {
 				return fmt.Errorf("pane %s is not at rest (%s); not sent (without --now it is queued)", pane, a.State)
 			}
 		}
 	}
-	argv := []string{"queue", "-w", pane}
+	argv := []string{"pane", "send-text", "--window", window}
 	if session != "" {
-		argv = append(argv, "-s", session)
+		argv = append(argv, "--session", session)
 	}
-	argv = append(argv, "--", prompt)
-	cmd := exec.Command(tuios(), argv...)
+	argv = append(argv, "--paste", "--submit", "--text", prompt)
+	cmd := exec.Command(mtm(), argv...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("tuios queue: %v: %s", err, strings.TrimSpace(stderr.String()))
+		return fmt.Errorf("mtm pane send-text: %v: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return nil
 }
@@ -423,7 +425,7 @@ func sendPrompt(path string, a args) (string, []string, error) {
 	return compose(path, src, from, notes), ids, nil
 }
 
-// sendNotes queues the open, unsent notes for pane through tuios and
+// sendNotes sends the open, unsent notes to pane through mtm and
 // marks them sent; it answers how many it sent.
 func sendNotes(path, pane string, now bool, a args) (int, error) {
 	prompt, ids, err := sendPrompt(path, a)

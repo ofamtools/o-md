@@ -62,7 +62,7 @@ func typeText(t *testing.T, a *App, s string) {
 	}
 }
 
-// setEnv runs as pane (an agent tuios lists, through a fake tuios; ""
+// setEnv runs as pane (an agent tuios lists, through a fake mtm; ""
 // none) for user.
 func setEnv(t *testing.T, pane, user string) {
 	t.Setenv("TUIOS_PANE_ID", pane)
@@ -71,7 +71,7 @@ func setEnv(t *testing.T, pane, user string) {
 	fakeTuios(t, pane)
 }
 
-// fakeTuios is a tuios that lists an agent in each pane given and logs
+// fakeTuios is an mtm that lists an agent in each pane given and logs
 // every other command to the file it answers.
 func fakeTuios(t *testing.T, panes ...string) string {
 	t.Helper()
@@ -83,16 +83,16 @@ func fakeTuios(t *testing.T, panes ...string) string {
 			agents = append(agents, `{"window_id":"`+p+`","name":"agent","state":"idle","ready":true,"session":"s"}`)
 		}
 	}
-	script := "#!/bin/sh\nif [ \"$1\" = list-agents ]; then echo '{\"agents\":[" + strings.Join(agents, ",") + "]}'; exit 0; fi\necho \"$@\" >> " + logf + "\n"
-	fake := filepath.Join(dir, "tuios")
+	script := "#!/bin/sh\nif [ \"$1 $2\" = \"agent scan\" ]; then echo '{\"agents\":[" + strings.Join(agents, ",") + "]}'; exit 0; fi\necho \"$@\" >> " + logf + "\n"
+	fake := filepath.Join(dir, "mtm")
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("O_MD_TUIOS", fake)
+	t.Setenv("O_MD_MTM", fake)
 	return logf
 }
 
-// A pane tuios lists no agent in is the owner's (mtm, a shell); an agent
+// A pane mtm lists no agent in is the owner's (mtm, a shell); an agent
 // may not sign as the owner.
 func TestIdentityNeedsAnAgent(t *testing.T) {
 	path := writeTemp(t, plan)
@@ -212,7 +212,7 @@ func TestCheckAndPrompt(t *testing.T) {
 	}
 }
 
-// o-md send queues through tuios (a fake here) and marks the notes sent;
+// o-md send types through mtm (a fake here) and marks the notes sent;
 // --now refuses a busy pane.
 func TestSend(t *testing.T) {
 	path := writeTemp(t, plan)
@@ -221,19 +221,19 @@ func TestSend(t *testing.T) {
 	t.Setenv("TUIOS_PANE_ID", "")
 	dir := t.TempDir()
 	logf := filepath.Join(dir, "log")
-	fake := filepath.Join(dir, "tuios")
-	script := "#!/bin/sh\nif [ \"$1\" = list-agents ]; then echo '{\"agents\":[{\"window_id\":\"p1\",\"name\":\"worker\",\"state\":\"working\",\"ready\":false,\"session\":\"s\"}]}'; exit 0; fi\necho \"$@\" >> " + logf + "\n"
+	fake := filepath.Join(dir, "mtm")
+	script := "#!/bin/sh\nif [ \"$1 $2\" = \"agent scan\" ]; then echo '{\"agents\":[{\"window_id\":\"p1\",\"name\":\"worker\",\"state\":\"working\",\"ready\":false,\"session\":\"s\"}]}'; exit 0; fi\necho \"$@\" >> " + logf + "\n"
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("O_MD_TUIOS", fake)
+	t.Setenv("O_MD_MTM", fake)
 	if _, err := cli(t, "send", path, "--pane", "p1", "--now"); err == nil || !strings.Contains(err.Error(), "not at rest") {
 		t.Fatalf("--now on a busy pane: %v", err)
 	}
 	if _, err := cli(t, "send", path, "--pane", "p1"); err != nil {
 		t.Fatal(err)
 	}
-	if log := read(t, logf); !strings.HasPrefix(log, "queue -w p1 -s s -- Notes on") || !strings.Contains(log, "keep a trash view") {
+	if log := read(t, logf); !strings.HasPrefix(log, "pane send-text --window p1 --session s --paste --submit --text Notes on") || !strings.Contains(log, "keep a trash view") {
 		t.Fatalf("queued %q", log)
 	}
 	if !strings.Contains(read(t, path), "· sent: keep a trash view") {
@@ -364,7 +364,7 @@ func TestPaletteSaveAs(t *testing.T) {
 }
 
 // g s sends the notes in standalone o-md: it opens the agent picker and
-// enter queues the notes through tuios (a fake here). g s is the hinted
+// enter sends the notes through mtm (a fake here). g s is the hinted
 // key; S stays bound, and ? help lists both.
 func TestGSSendsNotes(t *testing.T) {
 	path := writeTemp(t, plan)
@@ -399,7 +399,7 @@ func TestGSSendsNotes(t *testing.T) {
 	}
 	press(t, a, "enter")
 	settle(t, a, a.r.PendingCommands())
-	if log := read(t, logf); !strings.HasPrefix(log, "queue -w p1 -s s -- Notes on") || !strings.Contains(log, "keep a trash view") {
+	if log := read(t, logf); !strings.HasPrefix(log, "pane send-text --window p1 --session s --paste --submit --text Notes on") || !strings.Contains(log, "keep a trash view") {
 		t.Fatalf("queued %q", log)
 	}
 	if !strings.Contains(read(t, path), "· sent: keep a trash view") {

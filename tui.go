@@ -108,7 +108,7 @@ func (a *App) register() {
 	a.r.Define(docNoun).
 		Verb("save-as", saveAs, "Name the buffer: write it to PATH (parent directories made) and keep editing there; a scratch buffer's file moves, a named file stays where it was. An existing PATH asks first").Positional("path").
 		Verb("w", saveAs, "Save as (vim's :w PATH)").Positional("path").
-		Verb("send-notes", func(c ochazuke.Ctx) ochazuke.Result { return a.sendNotes(ochazuke.StringArg(c.Args, "pane", "")) }, "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent; without a pane, choose one").Positional("pane").
+		Verb("send-notes", func(c ochazuke.Ctx) ochazuke.Result { return a.sendNotes(ochazuke.StringArg(c.Args, "pane", "")) }, "Send the open, unsent notes to an agent pane as one prompt (typed into the pane; refused while it waits on a prompt) and mark them sent; without a pane, choose one").Positional("pane").
 		Mode("normal").
 		// g s is the hinted key (the footer shows a request's first row);
 		// S stays bound, and ? and the palette list both.
@@ -118,7 +118,7 @@ func (a *App) register() {
 	for verb, params := range map[string]map[string]ochazuke.Parameter{
 		"save-as":    {"path": {Type: "string", Required: true, Description: "Where to write the buffer (~ is your home)"}, "force": {Type: "boolean", Description: "Overwrite an existing file"}},
 		"w":          {"path": {Type: "string", Required: true}, "force": {Type: "boolean"}},
-		"send-notes": {"pane": {Type: "string", Description: "The tuios pane (id or name); none opens a picker"}},
+		"send-notes": {"pane": {Type: "string", Description: "The agent pane (id or name); none opens a picker"}},
 	} {
 		op := a.r.Operations.At(ochazuke.Key(docNoun + "." + verb))
 		op.Parameters = params
@@ -216,7 +216,7 @@ func (a *App) sendNotes(pane string) ochazuke.Result {
 		}
 		list, _ := v.([]agent)
 		if len(list) == 0 {
-			c.Runtime.UI().Status("no tuios agent panes")
+			c.Runtime.UI().Status("no agent panes")
 			return
 		}
 		rows := make([]ochazuke.PickerRow, len(list))

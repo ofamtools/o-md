@@ -267,7 +267,7 @@ func TestDocArchiveAttribution(t *testing.T) {
 	}
 }
 
-// send-notes queues the open, unsent notes for the pane through tuios
+// send-notes sends the open, unsent notes to the pane through mtm
 // and marks them sent; without a pane it says so.
 func TestDocSendNotes(t *testing.T) {
 	root, _ := docEnv(t)
@@ -281,7 +281,7 @@ func TestDocSendNotes(t *testing.T) {
 	if err := json.Unmarshal([]byte(mustShell(t, "doc", "send-notes", "p1", "--target", path)), &sent); err != nil || sent["sent"] != float64(1) {
 		t.Fatalf("send %v %v", sent, err)
 	}
-	if log := read(t, logf); !strings.HasPrefix(log, "queue -w p1 -s s -- Notes on") || !strings.Contains(log, "per task") {
+	if log := read(t, logf); !strings.HasPrefix(log, "pane send-text --window p1 --session s --paste --submit --text Notes on") || !strings.Contains(log, "per task") {
 		t.Fatalf("queued %q", log)
 	}
 	if !strings.Contains(read(t, path), "· sent: per task") {
