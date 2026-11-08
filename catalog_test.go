@@ -346,7 +346,7 @@ func TestShellCommandOrFile(t *testing.T) {
 		t.Fatal("dispatch")
 	}
 	writeFile(t, filepath.Join(dir, "doc"), "# a file called doc\n")
-	if isShellCommand([]string{"doc"}) {
-		t.Fatal("an existing file named doc is a file")
+	if !isShellCommand([]string{"doc"}) || isShellCommand([]string{"./doc"}) {
+		t.Fatal("a command word wins over a file of that name; ./doc is the file")
 	}
 }

@@ -601,16 +601,18 @@ func (c *catalogApp) sendNotes(path string, args ochazuke.Arguments) (any, error
 }
 
 // isShellCommand reports whether argv is for the catalog's command line
-// (catalog, a noun of it, help of one) rather than a file to open.
+// (catalog, a noun of it) rather than a file to open. A command word wins
+// over a file of the same name in the directory; ./NAME opens the file. The
+// nouns come from the catalog runtime, not from a list of words.
 func isShellCommand(argv []string) bool {
-	if len(argv) == 0 || exists(argv[0]) {
+	if len(argv) == 0 {
 		return false
 	}
-	switch argv[0] {
-	case "catalog", docNoun, "settings", "ochazuke", "bindings", "operations", "history":
+	if argv[0] == "catalog" {
 		return true
 	}
-	return false
+	c, err := newCatalogApp()
+	return err == nil && c.r.Noun(argv[0]) != nil
 }
 
 // runShell runs one catalog command (o-md catalog, o-md doc VERB ...).
