@@ -10,7 +10,7 @@ import (
 // it. Tests that need an agent identity set their own environment.
 func TestMain(m *testing.M) {
 	for _, key := range []string{
-		"OCHAZUKE_ACTOR", "OCHAZUKE_HARNESS", "TUIOS_HARNESS", "AGENT_HARNESS",
+		"OCHAZUKE_ACTOR", "OCHAZUKE_HARNESS", "MTM_HARNESS", "TUIOS_HARNESS", "AGENT_HARNESS",
 		"CODEX_THREAD_ID", "CODEX_CI", "CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID",
 		"CLAUDE_CODE_ENTRYPOINT", "PI_SESSION_ID",
 	} {

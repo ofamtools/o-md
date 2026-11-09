@@ -8,7 +8,7 @@ bin=${1:-$here/../o-md}
 src=${O_MD_SMOKE_SOURCE:-$HOME/hub/o-plans/matomeru-features.md}
 work=$(mktemp -d "${TMPDIR:-/tmp}/o-md-smoke.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-export O_MD_DATA="$work/data" USER=owner TUIOS_PANE_ID=
+export O_MD_DATA="$work/data" USER=owner MTM_PANE_ID= TUIOS_PANE_ID=
 copy="$work/features.md"
 cp "$src" "$copy"
 keys="$here/pty_keys.py"
@@ -30,18 +30,18 @@ agent=11111111-2222-3333-4444-555555555555
 printf '#!/bin/sh\nif [ "$1 $2" = "agent scan" ]; then echo '"'"'{"agents":[{"window_id":"%s","name":"smoke","state":"idle","ready":true,"session":"s"}]}'"'"'; fi\n' "$agent" > "$work/mtm"
 chmod +x "$work/mtm"
 export O_MD_MTM="$work/mtm"
-id=$(TUIOS_PANE_ID=$agent "$bin" note "$copy" --item "Archive and restore" "started on the trash view")
+id=$(MTM_PANE_ID=$agent "$bin" note "$copy" --item "Archive and restore" "started on the trash view")
 echo "agent note: $id"
-TUIOS_PANE_ID=$agent "$bin" notes "$copy" --item "Archive and restore" | tee "$work/notes.jsonl"
+MTM_PANE_ID=$agent "$bin" notes "$copy" --item "Archive and restore" | tee "$work/notes.jsonl"
 grep -q "\"author\":\"$agent\"" "$work/notes.jsonl" || fail "agent identity"
 grep -q '"self_declared":false' "$work/notes.jsonl" || fail "pane identity is not self-declared"
 owner_id=$("$bin" notes "$copy" | grep '"author":"owner"' | head -1 | sed 's/.*"id":"\([^"]*\)".*/\1/')
-if TUIOS_PANE_ID=$agent "$bin" note "$copy" --resolve "$owner_id" 2> "$work/refused"; then fail "agent resolved the owner's note"; fi
+if MTM_PANE_ID=$agent "$bin" note "$copy" --resolve "$owner_id" 2> "$work/refused"; then fail "agent resolved the owner's note"; fi
 cat "$work/refused"
 grep -q "only its author or the owner" "$work/refused" || fail "refusal message"
 reply=$("$bin" note "$copy" --reply "$id" "thanks, go on")
 echo "reply: $reply"
-TUIOS_PANE_ID=$agent "$bin" note "$copy" --resolve "$id"
+MTM_PANE_ID=$agent "$bin" note "$copy" --resolve "$id"
 "$bin" notes "$copy" --unresolved | grep -q "started on the trash view" && fail "resolved note listed as open"
 grep -q "started on the trash view" "$copy" || fail "resolved note must stay in the file"
 "$bin" notes "$copy" --format prompt | tee "$work/prompt.txt"
@@ -52,9 +52,9 @@ grep -q -- '--reply ID TEXT$' "$work/prompt.txt" || fail "prompt closing line"
 grep -q 'a smoke note' "$work/send.txt" || fail "send --dry-run"
 "$bin" check "$copy" --item "Archive and restore"
 grep -q '^- \[x\] Archive and restore' "$copy" || fail "check"
-if TUIOS_PANE_ID=$agent "$bin" note "$copy" --item "Archive and restore" --author owner "not me" 2> "$work/refused2"; then fail "agent signed as the owner"; fi
+if MTM_PANE_ID=$agent "$bin" note "$copy" --item "Archive and restore" --author owner "not me" 2> "$work/refused2"; then fail "agent signed as the owner"; fi
 grep -q "may not sign as the owner" "$work/refused2" || fail "owner refusal message"
-TUIOS_PANE_ID=99999999-2222-3333-4444-555555555555 "$bin" note "$copy" --item "Archive and restore" "from a shell pane" > /dev/null
+MTM_PANE_ID=99999999-2222-3333-4444-555555555555 "$bin" note "$copy" --item "Archive and restore" "from a shell pane" > /dev/null
 grep -q '> \*\*owner\*\* [0-9-]*: from a shell pane' "$copy" || fail "a pane without an agent is the owner"
 
 # 2b. The extension: catalog, doc list over a temp root, a verb on a target.

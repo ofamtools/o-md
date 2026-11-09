@@ -40,7 +40,7 @@ const usage = `Usage:
 
 doc list walks docs.roots (o-md settings set docs.roots ...; $O_MD_ROOTS overrides) and
 the host's project directories ($MTM_PROJECT_DIRS: top-level *.md and docs/**/*.md).
-TEXT "-" reads stdin. A note's author is --author, else $TUIOS_PANE_ID when mtm lists
+TEXT "-" reads stdin. A note's author is --author, else $MTM_PANE_ID (else $TUIOS_PANE_ID) when mtm lists
 an agent in that pane, else the owner ($O_MD_OWNER, else $USER); an agent may not sign
 as the owner. Only a note's author or the owner may edit, resolve or delete it.
 Scratch buffers live in $O_MD_DATA, else $XDG_DATA_HOME/o-md, else ~/.local/share/o-md.

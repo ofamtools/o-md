@@ -62,7 +62,7 @@ o md send FILE --pane ID [--now] [--dry-run]       # send the open notes to an a
 ```
 
 TEXT `-` reads stdin. A note's author is `--author`, else the agent mtm lists
-in `$TUIOS_PANE_ID`, else the owner (`$O_MD_OWNER`, else `$USER`); an agent may
+in `$MTM_PANE_ID` (else `$TUIOS_PANE_ID`), else the owner (`$O_MD_OWNER`, else `$USER`); an agent may
 not sign as the owner, and only a note's author or the owner may edit, resolve
 or delete it. `send` uses `mtm agent enqueue`: the prompt is typed when the agent is at rest and waits while it
 works, never over a prompt it waits on; with `--now` a pane that is not at rest refuses too. `--dry-run` prints the

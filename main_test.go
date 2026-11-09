@@ -65,6 +65,7 @@ func typeText(t *testing.T, a *App, s string) {
 // setEnv runs as pane (an agent tuios lists, through a fake mtm; ""
 // none) for user.
 func setEnv(t *testing.T, pane, user string) {
+	t.Setenv("MTM_PANE_ID", "")
 	t.Setenv("TUIOS_PANE_ID", pane)
 	t.Setenv("USER", user)
 	t.Setenv("O_MD_OWNER", "")
@@ -96,6 +97,7 @@ func fakeTuios(t *testing.T, panes ...string) string {
 // may not sign as the owner.
 func TestIdentityNeedsAnAgent(t *testing.T) {
 	path := writeTemp(t, plan)
+	t.Setenv("MTM_PANE_ID", "")
 	t.Setenv("TUIOS_PANE_ID", "aaaaaaaa-1111-2222-3333-444444444444")
 	t.Setenv("USER", "josh")
 	t.Setenv("O_MD_OWNER", "")
@@ -218,6 +220,7 @@ func TestSend(t *testing.T) {
 	path := writeTemp(t, plan)
 	setEnv(t, "", "josh")
 	_, _ = cli(t, "note", path, "--item", "archive", "keep a trash view")
+	t.Setenv("MTM_PANE_ID", "")
 	t.Setenv("TUIOS_PANE_ID", "")
 	dir := t.TempDir()
 	logf := filepath.Join(dir, "log")

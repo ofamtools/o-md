@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Changed: requires ochazuke v0.109.0 (esc only leaves insert in modals and `q` closes them; label-first pickers).
+- Changed: the pane variables are read as `MTM_X` first, then `TUIOS_X` (mtm sets both for one release): `ENV`, `SESSION`, `PANE_ID`, `HARNESS`, `AGENT_NAME`, through one `paneEnv` helper.
+
 ## v0.4.0 (2026-11-08)
 
 - Changed, breaking (lexicon, ochazuke v0.105.0, one shot, no aliases; every rename is in `docs/lexicon-renames-v0.105.tsv`): `doc note` is `doc annotate`, `doc copy-path` is `doc yank-path`, the editor's `doc path` verb is the `path` prop of the doc (`doc get --prop path`), `doc` is the main noun. The `o md note PATH` command is unchanged. `TestLexicon` runs with an empty baseline over both the catalog and the editor runtime.

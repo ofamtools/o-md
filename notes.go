@@ -12,7 +12,7 @@ import (
 )
 
 // identity is who runs an agent command: the --author given (self
-// declared), else the agent the command runs in ($TUIOS_PANE_ID,
+// declared), else the agent the command runs in ($MTM_PANE_ID (else $TUIOS_PANE_ID),
 // when mtm agent scan lists an agent in that pane), else the owner
 // ($O_MD_OWNER, else $USER). A pane that is not an agent's (a shell, mtm)
 // is the owner's. An agent may not declare itself the owner.
@@ -30,10 +30,10 @@ func identity(flagAuthor string) (author string, declared bool, err error) {
 	return owner(), false, nil
 }
 
-// callerAgent is $TUIOS_PANE_ID when mtm lists an agent in that pane,
+// callerAgent is $MTM_PANE_ID (else $TUIOS_PANE_ID) when mtm lists an agent in that pane,
 // else "" (no pane, a pane without an agent, or mtm not answering).
 func callerAgent() string {
-	pane := os.Getenv("TUIOS_PANE_ID")
+	pane := paneEnv(os.Getenv, "PANE_ID")
 	if pane == "" {
 		return ""
 	}
