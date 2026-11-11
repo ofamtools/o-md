@@ -37,7 +37,12 @@ type App struct {
 // with path "" a new scratch buffer under data, created on its first
 // edit.
 func newApp(path, data string, scratch bool) (*App, error) {
-	r := ochazuke.NewRuntime()
+	c, err := newCatalogApp()
+	if err != nil {
+		return nil, err
+	}
+	c.data = data
+	r := c.r
 	a := &App{r: r, path: path, scratch: scratch, data: data}
 	a.m = ochazuke.NewModel(r)
 	var src markdown.Source
@@ -54,12 +59,61 @@ func newApp(path, data string, scratch bool) (*App, error) {
 		}
 		src = markdown.File(path)
 	}
-	r.Instance(pageID, ochazuke.Kind(docNoun))
+	r.Instance(pageID, ochazuke.Kind(docNoun)).Data = path
 	doc, err := markdown.New(r, mdID, pageID, src, markdown.PreserveNewlines())
 	if err != nil {
 		return nil, err
 	}
 	a.doc = doc
+	c.pending = func(path string) (string, bool) {
+		if a.scratch && path == a.path {
+			return a.doc.Text(), true
+		}
+		return "", false
+	}
+	c.sendNotesUI = func(ctx ochazuke.Ctx) ochazuke.Result {
+		return a.sendNotes(ochazuke.StringArg(ctx.Args, "pane", ""))
+	}
+	c.beforeChange = func(path string) error {
+		if path == a.path {
+			return a.doc.Leave()
+		}
+		return nil
+	}
+	c.open = func(path string) error {
+		if err := a.doc.Leave(); err != nil {
+			return err
+		}
+		if err := a.doc.SetSource(markdown.File(path)); err != nil {
+			return err
+		}
+		a.path, a.scratch = path, false
+		a.r.Instance(pageID).Data = path
+		a.retitle()
+		return nil
+	}
+	c.moved = func(from, to string) error {
+		if a.path != from {
+			return nil
+		}
+		return c.open(to)
+	}
+	c.changed = func(path string) error {
+		if path == a.path {
+			return a.doc.SetSource(markdown.File(path))
+		}
+		return nil
+	}
+	c.deleted = func(path string) error {
+		if path != a.path {
+			return nil
+		}
+		text := a.doc.Text()
+		a.scratch = false
+		return a.doc.SetSource(markdown.Source{
+			Load: func() (string, error) { return text, nil },
+		})
+	}
 	a.register()
 	if _, err := r.AddPage(pageID, a.name(), a.render, ochazuke.Focus(doc.FocusTarget())); err != nil {
 		return nil, err
@@ -108,7 +162,6 @@ func (a *App) register() {
 	a.r.Define(docNoun).
 		Verb("save-as", saveAs, "Name the buffer: write it to PATH (parent directories made) and keep editing there; a scratch buffer's file moves, a named file stays where it was. An existing PATH asks first").Positional("path").
 		Verb("w", saveAs, "Save as (vim's :w PATH)").Positional("path").
-		Verb("send-notes", func(c ochazuke.Ctx) ochazuke.Result { return a.sendNotes(ochazuke.StringArg(c.Args, "pane", "")) }, "Send the open, unsent notes to an agent pane as one prompt (typed into the pane; refused while it waits on a prompt) and mark them sent; without a pane, choose one").Positional("pane").
 		Mode("normal").
 		// g s is the hinted key (the footer shows a request's first row);
 		// S stays bound, and ? and the palette list both.
@@ -116,19 +169,13 @@ func (a *App) register() {
 		Bind("S", ochazuke.Do(docNoun+".send-notes")).
 		Bind("q", ochazuke.Do("app.quit"))
 	for verb, params := range map[string]map[string]ochazuke.Parameter{
-		"save-as":    {"path": {Type: "string", Required: true, Description: "Where to write the buffer (~ is your home)"}, "force": {Type: "boolean", Description: "Overwrite an existing file"}},
-		"w":          {"path": {Type: "string", Required: true}, "force": {Type: "boolean"}},
-		"send-notes": {"pane": {Type: "string", Description: "The agent pane (id or name); none opens a picker"}},
+		"save-as": {"path": {Type: ochazuke.PropPath, Path: "file", New: true, Required: true, Description: "Where to write the buffer (~ is your home)"}, "force": {Type: "boolean", Description: "Overwrite an existing file"}},
+		"w":       {"path": {Type: ochazuke.PropPath, Path: "file", New: true, Required: true}, "force": {Type: "boolean"}},
 	} {
 		op := a.r.Operations.At(ochazuke.Key(docNoun + "." + verb))
 		op.Parameters = params
 		a.r.Operations.Set(op)
 	}
-	// The buffer is one thing; the file it is written to is its path prop.
-	a.r.Define(docNoun).Props(ochazuke.PropSpec{Name: "path", ReadOnly: true,
-		Parameter: ochazuke.Parameter{Type: ochazuke.SettingString, Description: "The file the buffer is written to"},
-		Read:      func(ochazuke.Ctx, ochazuke.Thing) (any, error) { return a.path, nil }}).
-		Store(ochazuke.Store{Kind: ochazuke.Singleton, Facts: true, Get: func(ochazuke.Ctx, string) (ochazuke.Thing, error) { return ochazuke.Thing{}, nil }})
 	a.r.Define(agentNoun)
 }
 
@@ -189,6 +236,7 @@ func (a *App) saveAs(path string, force bool) error {
 		return err
 	}
 	a.path, a.scratch = abs, false
+	a.r.Instance(pageID).Data = abs
 	if wasScratch && exists(old) {
 		_ = os.Remove(old) // a scratch buffer moves; a named file stays
 	}

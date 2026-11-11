@@ -469,3 +469,24 @@ func cmdScratch(in []string, data string, stdout io.Writer) error {
 	}
 	return nil
 }
+
+// splitDataArgs removes the app-owned data flag before the generic CLI reads
+// its arguments. It is accepted before or after the noun, just as in the editor.
+func splitDataArgs(argv []string) ([]string, string, error) {
+	out := make([]string, 0, len(argv))
+	data := ""
+	for i := 0; i < len(argv); i++ {
+		if argv[i] == "--data" {
+			i++
+			if i >= len(argv) {
+				return nil, "", errors.New("--data needs a directory")
+			}
+			data = argv[i]
+		} else if value, ok := strings.CutPrefix(argv[i], "--data="); ok {
+			data = value
+		} else {
+			out = append(out, argv[i])
+		}
+	}
+	return out, data, nil
+}

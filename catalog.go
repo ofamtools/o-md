@@ -7,9 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -21,15 +19,8 @@ import (
 	"ofam.dev/oden"
 )
 
-// The catalog: o-md as a family extension. Noun doc lists the Markdown
-// files under the docs roots (rows: title, path, root, modified,
-// open_tasks, open_notes) and acts on one (--target PATH): new, set (rename,
-// archive and restore are its @label and @archive), delete, archive, yank-path, show, notes, annotate, check, uncheck and send-notes. The
-// Docs page (docsPage) is a split of the docs list beside a markdown
-// detail (detail kind markdown, pathField path): a host that registers
-// the kind (mtm, markdown/cliview) draws the selected file as an editable
-// document. Every verb runs in this process over the files; a host runs
-// `o-md doc VERB --target PATH --json ARGS --yes`.
+// The extension declares the file-backed document store once. The runtime
+// derives the standard actions; documentActions adds domain and host operations.
 
 const (
 	paneNoun   = "pane"
@@ -82,15 +73,33 @@ type docRow struct {
 
 // catalogApp is the runtime the command line runs the doc verbs on.
 type catalogApp struct {
-	r    *ochazuke.Runtime
-	list *ochazuke.Collection
-	now  func() time.Time
+	r            *ochazuke.Runtime
+	list         *ochazuke.Collection
+	now          func() time.Time
+	trash        func(string) error
+	open         func(string) error
+	moved        func(string, string) error
+	beforeChange func(string) error
+	changed      func(string) error
+	deleted      func(string) error
+	sendNotesUI  func(ochazuke.Ctx) ochazuke.Result
+	pending      func(string) (string, bool)
+	state        *documentState
+	data         string
 }
 
 func newCatalogApp() (*catalogApp, error) {
 	r := ochazuke.NewRuntime()
 	r.Config().App = "o-md"
-	c := &catalogApp{r: r, now: time.Now}
+	c := &catalogApp{r: r, now: time.Now, trash: systemTrash}
+	c.state = &documentState{dir: func() string {
+		if c.data != "" {
+			return c.data
+		}
+		return dataDir("")
+	}}
+	c.open = func(path string) error { return run([]string{"--data", c.state.dir(), path}, os.Stdin, os.Stdout) }
+	r.SetRelationStore(c.state)
 	if err := r.DeclareSetting(ochazuke.Setting{Name: rootsSetting, Type: ochazuke.SettingList, Default: slices.Clone(defaultRoots),
 		Description: "The directories doc list walks for Markdown files (~ is your home); $O_MD_ROOTS (" + string(os.PathListSeparator) + " between) overrides it"}); err != nil {
 		return nil, err
@@ -124,32 +133,32 @@ func (c *catalogApp) define() {
 	r.DefineOwn(paneNoun)
 	r.Define(docNoun).Columns(docColumns...).Props(docProps()...).Store(c.docStore()).
 		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md)").Rows(docNoun).Fetch().Quiet().
-		Verb("show", c.on(c.showDoc), "Show one doc's row").Fetch().
-		Verb("new", c.newDoc, "Create a doc: NAME.md under ROOT (default the first docs root), a heading of its name; no name is an untitled doc").Positional("name", "root").
-		Verb("yank-path", c.on(c.yankPath), "Copy the doc's path to the clipboard and answer it").
+		Verb("open", c.on(c.openDoc), "Open the document in o-md's rendered Markdown editor, not an OS application").OpensPage(docsPageID).
+		Verb("new", c.newDoc, "Create a doc: NAME.md under ROOT (default the first docs root), a heading of its name; no name is an untitled doc").Positional("name", "root").Creates().
 		Verb("notes", c.on(c.notes), "The doc's notes: JSON records, or with --format prompt one message for an agent").Fetch().
 		Verb("annotate", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
 		Verb("check", c.on(c.check(true)), "Check the first checklist item holding ITEM").Positional("item").
 		Verb("uncheck", c.on(c.check(false)), "Uncheck the first checklist item holding ITEM").Positional("item").
-		Verb("send-notes", c.on(c.sendNotes), "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent").Positional("pane").
+		Verb("send-notes", c.sendNotesAction, "Send the open, unsent notes to an agent pane as one prompt (queued by tuios until the agent is at rest) and mark them sent").Positional("pane").
 		// The catalog's key row: a host mounting the Docs page answers g s
 		// on the doc list and in the markdown detail, and asks for the pane
 		// (a noun-typed parameter) with its own picker.
 		Mode("normal").
 		Bind("g s", ochazuke.Do(docNoun+".send-notes"))
 	params := map[string]map[string]ochazuke.Parameter{
-		"list": {"root": {Type: "string", Description: "More roots to walk (" + string(os.PathListSeparator) + " or , between)"},
+		"open": {"id": docSubject()},
+		"list": {"root": {Type: ochazuke.PropPath, Path: "dir", Description: "An additional root to walk"},
 			"archived": {Type: "boolean", Description: "List only archived documents"}},
 		"new": {"name": {Type: "string", Description: "The doc's name (its file NAME.md); none is untitled-TIME"},
-			"root": {Type: "string", Description: "The directory it goes in; default the first docs root"}},
-		"notes": {"format": {Type: "string", Enum: []string{"jsonl", "prompt"}, Description: "jsonl (records, the default) or prompt"},
+			"root": {Type: ochazuke.PropPath, Path: "dir", New: true, Description: "The directory it goes in; default the first docs root"}},
+		"notes": {"id": docSubject(), "format": {Type: "string", Enum: []string{"jsonl", "prompt"}, Description: "jsonl (records, the default) or prompt"},
 			"item": {Type: "string", Description: "Only the notes under the first item holding this"}, "unresolved": {Type: "boolean"}, "unsent": {Type: "boolean"}},
-		"annotate": {"item": {Type: "string", Description: "Add a note under the first item holding this"}, "reply": {Type: "string", Description: "Reply to note ID"},
+		"annotate": {"id": docSubject(), "item": {Type: "string", Description: "Add a note under the first item holding this"}, "reply": {Type: "string", Description: "Reply to note ID"},
 			"edit": {Type: "string", Description: "Replace note ID's text"}, "resolve": {Type: "string"}, "unresolve": {Type: "string"}, "delete": {Type: "string"},
 			"text": {Type: "string", Description: "The note's text (add, reply, edit)"}, "author": {Type: "string", Description: "Sign as this name (self-declared); an agent may not sign as the owner"}},
-		"check":   {"item": {Type: "string", Required: true}},
-		"uncheck": {"item": {Type: "string", Required: true}},
-		"send-notes": {"pane": {Type: "string", Noun: paneNoun, Free: true, Description: "The tuios pane (window id or name); a host chooses one when it is missing"},
+		"check":   {"id": docSubject(), "item": {Type: "string", Required: true}},
+		"uncheck": {"id": docSubject(), "item": {Type: "string", Required: true}},
+		"send-notes": {"id": docSubject(), "pane": {Type: "string", Noun: paneNoun, HostNoun: paneNoun, Free: true, Description: "The tuios pane (window id or name); a host chooses one when it is missing"},
 			"now": {Type: "boolean", Description: "Refuse a pane that is not at rest instead of queueing"}, "item": {Type: "string", Description: "Only the notes under the first item holding this"}},
 	}
 	for verb, p := range params {
@@ -157,12 +166,33 @@ func (c *catalogApp) define() {
 		op.Parameters = p
 		r.Operations.Set(op)
 	}
+	c.documentActions()
+}
+
+func (c *catalogApp) sendNotesAction(ctx ochazuke.Ctx) ochazuke.Result {
+	if c.sendNotesUI != nil {
+		return c.sendNotesUI(ctx)
+	}
+	return c.on(c.sendNotes)(ctx)
+}
+
+func (c *catalogApp) openDoc(path string, _ ochazuke.Arguments) (any, error) {
+	if err := c.open(path); err != nil {
+		return nil, err
+	}
+	return c.docThing(path)
 }
 
 // on runs a verb on the doc its instance names (--target PATH).
 func (c *catalogApp) on(run func(path string, args ochazuke.Arguments) (any, error)) ochazuke.AppHandler {
 	return func(ctx ochazuke.Ctx) ochazuke.Result {
-		path := targetPath(ctx.Instance)
+		path, err := c.targetPath(ctx.Instance)
+		if id := ochazuke.StringArg(ctx.Args, "id", ""); id != "" {
+			path, err = c.state.path(id)
+		}
+		if err != nil {
+			return ochazuke.Failed(err)
+		}
 		if path == "" {
 			return ochazuke.Failed(errors.New("name a doc: --target PATH"))
 		}
@@ -176,23 +206,20 @@ func (c *catalogApp) on(run func(path string, args ochazuke.Arguments) (any, err
 
 // targetPath is the file a doc instance names: its Data (a row's own id)
 // or its id, when it is a path.
-func targetPath(inst *ochazuke.Instance) string {
-	if inst == nil || inst.Noun != docNoun {
-		return ""
+func (c *catalogApp) targetPath(inst *ochazuke.Instance) (string, error) {
+	if inst == nil {
+		return "", nil
 	}
 	id, _ := inst.Data.(string)
 	if id == "" {
 		id = inst.ID
 	}
-	if p, err := expand(id); err == nil {
-		return p
-	}
-	return ""
+	return c.state.path(id)
 }
 
 // reveal makes a doc row exist for a --target PATH.
 func (c *catalogApp) reveal(target string) error {
-	path, err := expand(target)
+	path, err := c.state.path(target)
 	if err != nil {
 		return err
 	}
@@ -244,14 +271,18 @@ func splitList(s string) []string {
 func (c *catalogApp) listDocs(ctx ochazuke.Ctx) ochazuke.Result {
 	archived, _ := ctx.Args["archived"].(bool)
 	withArchived := archived || !c.r.Settings().Bool("docs.hide-archived")
-	return ochazuke.Done(c.docRows(ochazuke.StringArg(ctx.Args, "root", ""), archived, withArchived))
+	rows, err := c.docRows(ochazuke.StringArg(ctx.Args, "root", ""), archived, withArchived)
+	if err != nil {
+		return ochazuke.Failed(err)
+	}
+	return ochazuke.Done(rows)
 }
 
 // docRows are the doc rows doc list answers: every root's Markdown files
 // (recursively; extraRoots adds more), every project directory's
 // top-level *.md and docs/**/*.md, newest first. archivedOnly lists only
 // the archived ones, withArchived includes them.
-func (c *catalogApp) docRows(extraRoots string, archivedOnly, withArchived bool) []docRow {
+func (c *catalogApp) docRows(extraRoots string, archivedOnly, withArchived bool) ([]docRow, error) {
 	seen := map[string]bool{}
 	var rows []docRow
 	add := func(root, path string) {
@@ -259,7 +290,7 @@ func (c *catalogApp) docRows(extraRoots string, archivedOnly, withArchived bool)
 			return
 		}
 		seen[path] = true
-		if row, err := c.rowOf(root, path); err == nil {
+		if row, err := c.rawRow(root, path); err == nil {
 			rows = append(rows, row)
 		}
 	}
@@ -293,7 +324,7 @@ func (c *catalogApp) docRows(extraRoots string, archivedOnly, withArchived bool)
 	if rows == nil {
 		rows = []docRow{}
 	}
-	return rows
+	return rows, c.state.identify(rows)
 }
 
 // walkMarkdown calls fn with every *.md file under root, skipping
@@ -320,17 +351,18 @@ func walkMarkdown(root string, fn func(string)) {
 }
 
 // rowOf is the doc row of the file at path under root.
-func (c *catalogApp) rowOf(root, path string) (docRow, error) {
-	info, err := os.Stat(path)
+func (c *catalogApp) rawRow(root, path string) (docRow, error) {
+	src, err := c.readDocument(path)
 	if err != nil {
 		return docRow{}, err
 	}
-	b, err := os.ReadFile(path)
-	if err != nil {
+	modified := ""
+	if info, err := os.Stat(path); err == nil {
+		modified = info.ModTime().UTC().Format(time.RFC3339Nano)
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return docRow{}, err
 	}
-	src := string(b)
-	row := docRow{ID: path, Title: docTitle(src, path), Path: path, Root: tilde(root), Modified: info.ModTime().Local().Format("2006-01-02 15:04")}
+	row := docRow{ID: path, Title: docTitle(src, path), Path: path, Root: root, Modified: modified}
 	for _, t := range markdown.Tasks(src) {
 		if !t.Checked {
 			row.OpenTasks++
@@ -339,6 +371,27 @@ func (c *catalogApp) rowOf(root, path string) (docRow, error) {
 	row.OpenNotes = len(openNotes(markdown.Notes(src), false))
 	row.Cells = []string{row.Title, row.Root, row.Modified, fmt.Sprint(row.OpenTasks), fmt.Sprint(row.OpenNotes)}
 	return row, nil
+}
+
+func (c *catalogApp) rowOf(root, path string) (docRow, error) {
+	row, err := c.rawRow(root, path)
+	if err != nil {
+		return row, err
+	}
+	rows := []docRow{row}
+	if err := c.state.identify(rows); err != nil {
+		return docRow{}, err
+	}
+	return rows[0], nil
+}
+
+func (c *catalogApp) readDocument(path string) (string, error) {
+	if c.pending != nil {
+		if text, ok := c.pending(path); ok {
+			return text, nil
+		}
+	}
+	return readText(path)
 }
 
 // docTitle is the first heading's text, else the file name without .md.
@@ -374,10 +427,6 @@ func (c *catalogApp) rootOf(path string) string {
 		}
 	}
 	return filepath.Dir(path)
-}
-
-func (c *catalogApp) showDoc(path string, _ ochazuke.Arguments) (any, error) {
-	return c.rowOf(c.rootOf(path), path)
 }
 
 // newDoc is doc new (and the standard create): record first, the file is
@@ -450,11 +499,24 @@ func (c *catalogApp) renameDoc(path string, args ochazuke.Arguments) (any, error
 	if !exists(path) {
 		return nil, fmt.Errorf("%s: no such file", tilde(path))
 	}
+	if c.beforeChange != nil {
+		if err := c.beforeChange(path); err != nil {
+			return nil, err
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return nil, err
 	}
 	if err := os.Rename(path, dest); err != nil {
 		return nil, err
+	}
+	if err := c.state.move(path, dest); err != nil {
+		return nil, errors.Join(err, os.Rename(dest, path))
+	}
+	if c.moved != nil {
+		if err := c.moved(path, dest); err != nil {
+			return nil, err
+		}
 	}
 	return c.rowOf(c.rootOf(dest), dest)
 }
@@ -481,42 +543,23 @@ func (c *catalogApp) moveToArchive(path string, restore bool) (any, error) {
 }
 
 func (c *catalogApp) deleteDoc(path string, _ ochazuke.Arguments) (any, error) {
-	if err := os.Remove(path); err != nil {
+	if c.beforeChange != nil {
+		if err := c.beforeChange(path); err != nil {
+			return nil, err
+		}
+	}
+	if err := c.trash(path); err != nil {
 		return nil, err
 	}
-	return map[string]string{"deleted": path}, nil
-}
-
-// copyPath copies the path with the platform's clipboard command when
-// there is one and answers it either way.
-func (c *catalogApp) yankPath(path string, _ ochazuke.Arguments) (any, error) {
-	return map[string]any{"path": path, "copied": copyToClipboard(path) == nil}, nil
-}
-
-// copyToClipboard writes text to the system clipboard ($O_MD_CLIPBOARD,
-// else pbcopy, wl-copy, xclip or xsel).
-func copyToClipboard(text string) error {
-	var argv []string
-	if cmd := os.Getenv("O_MD_CLIPBOARD"); cmd != "" {
-		argv = strings.Fields(cmd)
-	} else {
-		candidates := [][]string{{"wl-copy"}, {"xclip", "-selection", "clipboard"}, {"xsel", "--clipboard", "--input"}}
-		if runtime.GOOS == "darwin" {
-			candidates = append([][]string{{"pbcopy"}}, candidates...)
-		}
-		for _, cand := range candidates {
-			if _, err := exec.LookPath(cand[0]); err == nil {
-				argv = cand
-				break
-			}
+	if err := c.state.markTrashed(path); err != nil {
+		return nil, err
+	}
+	if c.deleted != nil {
+		if err := c.deleted(path); err != nil {
+			return nil, err
 		}
 	}
-	if len(argv) == 0 {
-		return errors.New("no clipboard command")
-	}
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdin = strings.NewReader(text)
-	return cmd.Run()
+	return map[string]string{"trashed": path}, nil
 }
 
 // argsOf is a verb's arguments as the legacy commands' flags.
@@ -618,6 +661,10 @@ func isShellCommand(argv []string) bool {
 // runShell runs one catalog command (o-md catalog, o-md doc VERB ...).
 func runShell(argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	c, err := newCatalogApp()
+	if err != nil {
+		return err
+	}
+	argv, c.data, err = splitDataArgs(argv)
 	if err != nil {
 		return err
 	}

@@ -5,31 +5,28 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"os"
+
 	"ofam.dev/ochazuke"
+	"ofam.dev/ochazuke/markdown"
 )
 
-// The doc noun is a thing noun (DESIGN-001) over the Markdown files: the
-// key is the file's path; name (the label) is the file name, and writing it
-// renames the file (set @label=NEW, what doc rename was: a name in the same
-// directory, or a path); archived (the archive role) is whether the file
-// lies under ROOT/.archive, and writing it moves the file there or back
-// (archive and set archived=false, what doc archive and doc restore were).
-// Both moves refuse to overwrite a file. The standard create is doc new,
-// delete removes the file (asking first). list, show and new stay named
-// verbs: list takes roots and --archived, show answers the row.
+// The document store owns filesystem effects; the runtime supplies the
+// standard verbs, forms, history and archive-first deletion from this declaration.
 
 func docProps() []ochazuke.PropSpec {
 	text := func(name, desc string) ochazuke.PropSpec {
 		return ochazuke.PropSpec{Name: name, ReadOnly: true, Parameter: ochazuke.Parameter{Type: "string", Description: desc}}
 	}
 	return []ochazuke.PropSpec{
-		{Name: "id", Key: true, Parameter: ochazuke.Parameter{Type: "string", Description: "The file's path (~ is your home)"}},
-		{Name: "name", Role: ochazuke.RoleLabel, Human: true, Parameter: ochazuke.Parameter{Type: "string", Description: "The file's name; writing it renames the file (a bare name stays in the directory, a path moves it; .md is added)", Free: true}},
+		{Name: "id", Key: true, Parameter: ochazuke.Parameter{Type: "string", Description: "Stable document identity; path selectors are also accepted"}},
+		{Name: "name", Role: ochazuke.RoleLabel, Parameter: ochazuke.Parameter{Type: "string", Description: "The file's name; writing it renames the file (a bare name stays in the directory, a path moves it; .md is added)", Free: true}},
 		{Name: "archived", Role: ochazuke.RoleArchive, Parameter: ochazuke.Parameter{Type: ochazuke.SettingBoolean, Description: "Whether the file lies under ROOT/.archive; writing it moves the file there or back, never over an existing file"}},
 		text("title", "The first heading, else the file name"),
-		text("path", "The file's path"),
-		text("root", "The docs root or project directory it lies under"),
-		text("modified", "When the file was last changed"),
+		{Name: "path", Human: true, Parameter: ochazuke.Parameter{Type: ochazuke.PropPath, Path: "file", New: true, Description: "The document file; changing it moves the actual file without overwriting"}},
+		{Name: "root", CreateOnly: true, Parameter: ochazuke.Parameter{Type: ochazuke.PropPath, Path: "dir", New: true, Description: "The docs root or project directory"}},
+		{Name: "modified", ReadOnly: true, Parameter: ochazuke.Parameter{Type: ochazuke.PropTime, Description: "When the file was last changed"}},
+		{Name: "content", Multiline: true, Parameter: ochazuke.Parameter{Type: "string", Description: "The complete Markdown text; each edit writes the file"}},
 		{Name: "open_tasks", ReadOnly: true, Parameter: ochazuke.Parameter{Type: ochazuke.SettingInteger, Description: "Unchecked checklist items"}},
 		{Name: "open_notes", ReadOnly: true, Parameter: ochazuke.Parameter{Type: ochazuke.SettingInteger, Description: "Unresolved notes"}},
 	}
@@ -60,90 +57,187 @@ func (c *catalogApp) docThing(path string) (ochazuke.Thing, error) {
 		return nil, err
 	}
 	delete(th, "cells")
-	th["id"] = path
 	th["name"] = filepath.Base(path)
 	th["archived"] = in
+	src, err := c.readDocument(path)
+	if err != nil {
+		return nil, err
+	}
+	th["content"] = src
 	return th, nil
 }
 
 func (c *catalogApp) docStore() ochazuke.Store {
 	return ochazuke.Store{
 		Kind: ochazuke.KindCollection,
+		Undo: true, AcceptsKey: true,
 		Get: func(_ ochazuke.Ctx, id string) (ochazuke.Thing, error) {
-			path, err := expand(id)
+			path, err := c.state.path(id)
 			if err != nil {
 				return nil, err
-			}
-			if !exists(path) {
-				return nil, fmt.Errorf("%s: no such file", tilde(path))
 			}
 			return c.docThing(path)
 		},
 		List: func(_ ochazuke.Ctx, q ochazuke.ListQuery) ([]ochazuke.Thing, error) {
 			root, _ := q.Args["root"].(string)
-			rows := c.docRows(root, false, true)
+			rows, err := c.docRows(root, false, true)
+			if err != nil {
+				return nil, err
+			}
 			out := make([]ochazuke.Thing, 0, len(rows))
 			for _, row := range rows {
-				th, err := c.docThing(row.Path)
+				th, err := ochazuke.ThingOf(row)
 				if err != nil {
-					continue
+					return nil, err
 				}
+				delete(th, "cells")
+				th["name"] = filepath.Base(row.Path)
+				_, th["archived"] = c.archiveRoot(row.Path)
 				out = append(out, th)
 			}
 			return out, nil
 		},
 		ListParams: map[string]ochazuke.Parameter{
-			"root": {Type: "string", Description: "More roots to walk"},
+			"root": {Type: ochazuke.PropPath, Path: "dir", Description: "Another root to walk"},
 		},
 		Create: func(_ ochazuke.Ctx, t ochazuke.Thing) (ochazuke.Thing, error) {
-			name, _ := t["name"].(string)
-			root, _ := t["root"].(string)
-			row, err := c.makeDoc(name, root)
-			if err != nil {
-				return nil, err
-			}
-			return c.docThing(row.Path)
+			return c.createThing(t)
 		},
-		Patch: func(_ ochazuke.Ctx, id string, t ochazuke.Thing) (ochazuke.Thing, error) {
-			path, err := expand(id)
-			if err != nil {
-				return nil, err
-			}
-			if !exists(path) {
-				return nil, fmt.Errorf("%s: no such file", tilde(path))
-			}
-			// Archive first: the name is then the file in its new place.
-			if v, ok := t["archived"]; ok {
-				want, _ := v.(bool)
-				if _, in := c.archiveRoot(path); in != want {
-					if _, err := c.moveToArchive(path, !want); err != nil {
-						return nil, err
-					}
-					path = c.archivedPath(path, !want)
-				}
-			}
-			if v, ok := t["name"]; ok {
-				to, _ := v.(string)
-				if to == "" {
-					return nil, errors.New("a doc needs a name")
-				}
-				if _, err := c.renameDoc(path, ochazuke.Arguments{"to": to}); err != nil {
-					return nil, err
-				}
-				path = c.renamedPath(path, to)
-			}
-			return c.docThing(path)
-		},
+		Patch: c.patchThing,
 		Delete: func(_ ochazuke.Ctx, id string) error {
-			path, err := expand(id)
+			path, err := c.state.path(id)
 			if err != nil {
 				return err
 			}
 			_, err = c.deleteDoc(path, nil)
 			return err
 		},
-		Confirm: map[string]string{"delete": "Delete {{label}}? The file is removed from disk."},
+		Confirm: map[string]string{"delete": "Move {{label}} to the system trash? The actual document file leaves its current location."},
 	}
+}
+
+func (c *catalogApp) patchThing(_ ochazuke.Ctx, id string, t ochazuke.Thing) (ochazuke.Thing, error) {
+	path, err := c.state.path(id)
+	if err != nil {
+		return nil, err
+	}
+	pending := false
+	if c.pending != nil {
+		_, pending = c.pending(path)
+	}
+	onDisk := exists(path)
+	if !onDisk && !pending {
+		return nil, fmt.Errorf("%s: no such file", tilde(path))
+	}
+	if c.beforeChange != nil {
+		if err := c.beforeChange(path); err != nil {
+			return nil, err
+		}
+	}
+	if dest, ok := t["path"].(string); ok && dest != path {
+		if _, err := c.renameDoc(path, ochazuke.Arguments{"to": dest}); err != nil {
+			return nil, err
+		}
+		path = c.renamedPath(path, dest)
+	}
+	// Archive first: the name is then the file in its new place.
+	if v, ok := t["archived"]; ok {
+		want, _ := v.(bool)
+		if _, in := c.archiveRoot(path); in != want {
+			if _, err := c.moveToArchive(path, !want); err != nil {
+				return nil, err
+			}
+			path = c.archivedPath(path, !want)
+		}
+	}
+	if v, ok := t["name"]; ok {
+		to, _ := v.(string)
+		if to == "" {
+			return nil, errors.New("a doc needs a name")
+		}
+		if _, err := c.renameDoc(path, ochazuke.Arguments{"to": to}); err != nil {
+			return nil, err
+		}
+		path = c.renamedPath(path, to)
+	}
+	if v, ok := t["content"]; ok {
+		src, _ := v.(string)
+		if !onDisk {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return nil, err
+			}
+		}
+		if err := markdown.WriteFile(path, src); err != nil {
+			return nil, err
+		}
+	}
+	if c.changed != nil {
+		if err := c.changed(path); err != nil {
+			return nil, err
+		}
+	}
+	return c.docThing(path)
+}
+
+func (c *catalogApp) createThing(t ochazuke.Thing) (ochazuke.Thing, error) {
+	name, _ := t["name"].(string)
+	root, _ := t["root"].(string)
+	var path string
+	if id, _ := t["id"].(string); id != "" {
+		var err error
+		path, err = c.state.restorePath(id)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return nil, err
+		}
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil, err
+		}
+		if err := f.Close(); err != nil {
+			return nil, err
+		}
+		if err := c.state.restored(id); err != nil {
+			return nil, err
+		}
+	} else {
+		if dest, _ := t["path"].(string); dest != "" {
+			path, err := expand(dest)
+			if err != nil {
+				return nil, err
+			}
+			root = filepath.Dir(path)
+			if name == "" {
+				name = filepath.Base(path)
+			}
+		}
+		row, err := c.makeDoc(name, root)
+		if err != nil {
+			return nil, err
+		}
+		path = row.Path
+	}
+	if src, ok := t["content"].(string); ok {
+		if err := markdown.WriteFile(path, src); err != nil {
+			return nil, err
+		}
+	}
+	if archived, _ := t["archived"].(bool); archived {
+		if _, in := c.archiveRoot(path); !in {
+			if _, err := c.moveToArchive(path, false); err != nil {
+				return nil, err
+			}
+			path = c.archivedPath(path, false)
+		}
+	}
+	if c.changed != nil {
+		if err := c.changed(path); err != nil {
+			return nil, err
+		}
+	}
+	return c.docThing(path)
 }
 
 // renamedPath is where renameDoc puts path for to.

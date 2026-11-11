@@ -52,6 +52,15 @@ func TestEditorPathIsAProp(t *testing.T) {
 	if err != nil || got != scratch {
 		t.Fatalf("doc get --prop path = %v, %v; want %s", got, err, scratch)
 	}
+	if exists(scratch) {
+		t.Fatal("reading a pending scratch record created a file")
+	}
+	if _, err := a.r.Execute(ochazuke.Request{Noun: docNoun, Verb: "set", Args: ochazuke.Arguments{"props": map[string]any{"content": "# Scratch\n"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, scratch); got != "# Scratch\n" || a.doc.Text() != got {
+		t.Fatal("a scratch record's content did not write through to its file and editor")
+	}
 	if _, ok := a.r.Operations.Find(ochazuke.Key("md.doc.path")); ok {
 		t.Fatal("doc path is still a verb")
 	}

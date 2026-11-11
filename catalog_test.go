@@ -47,6 +47,11 @@ func docEnv(t *testing.T) (root, proj string) {
 	t.Helper()
 	base := t.TempDir()
 	root, proj = filepath.Join(base, "plans"), filepath.Join(base, "proj")
+	t.Setenv("HOME", filepath.Join(base, "home"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(base, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(base, "state"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(base, "cache"))
+	fakeTrash(t, filepath.Join(base, "trash"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(base, "config"))
 	t.Setenv("O_MD_ROOTS", root)
 	t.Setenv("MTM_PROJECT_DIRS", proj)
@@ -92,7 +97,7 @@ func TestDocList(t *testing.T) {
 		}
 	}
 	p := rows["plan.md"]
-	if p.Title != "Plan" || p.OpenTasks != 4 || p.OpenNotes != 0 || p.ID != p.Path || len(p.Cells) != 5 || p.Root != tilde(root) {
+	if p.Title != "Plan" || p.OpenTasks != 4 || p.OpenNotes != 0 || !strings.HasPrefix(p.ID, "md-") || p.ID == p.Path || len(p.Cells) != 5 || p.Root != root {
 		t.Fatalf("plan row %+v", p)
 	}
 	if rows["notes.md"].Title != "notes" {
@@ -157,17 +162,16 @@ func TestDocVerbs(t *testing.T) {
 	if err := json.Unmarshal([]byte(mustShell(t, "doc", "show", "--target", row.Path)), &row); err != nil || row.Title != "Road map" {
 		t.Fatalf("show %+v %v", row, err)
 	}
-	if _, err := shell(t, "doc", "delete", "--target", row.Path); err == nil || exists(row.Path) == false {
+	if _, err := shell(t, "doc", "delete", "--archive-first=false", "--target", row.Path); err == nil || exists(row.Path) == false {
 		t.Fatalf("delete without --yes: %v", err)
 	}
-	mustShell(t, "doc", "delete", "--target", row.Path, "--yes")
+	mustShell(t, "doc", "delete", "--archive-first=false", "--target", row.Path, "--yes")
 	if exists(row.Path) {
 		t.Fatal("not deleted")
 	}
-	t.Setenv("O_MD_CLIPBOARD", "true")
-	var copied map[string]any
-	if err := json.Unmarshal([]byte(mustShell(t, "doc", "yank-path", "--target", path)), &copied); err != nil || copied["path"] != path || copied["copied"] != true {
-		t.Fatalf("yank-path %v %v", copied, err)
+	var yanked string
+	if err := json.Unmarshal([]byte(mustShell(t, "doc", "yank-path", "--target", path)), &yanked); err != nil || yanked != path {
+		t.Fatalf("yank-path = %q, %v", yanked, err)
 	}
 }
 

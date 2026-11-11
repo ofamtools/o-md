@@ -35,7 +35,7 @@ const usage = `Usage:
   o-md notes FILE [--item MATCH] [--unresolved] [--unsent] [--format jsonl|prompt]
   o-md check FILE --item MATCH | o-md uncheck FILE --item MATCH
   o-md send FILE --pane ID [--now] [--dry-run]
-  o-md doc list|show|get|new|set|edit|delete|archive|copy-path|notes|note|check|uncheck|send-notes [--target PATH] ...
+  o-md doc VERB [--target ID|PATH] ...   document actions (doc --help lists them)
   o-md catalog                   the extension's catalog (mtm extension register md mounts its Docs page)
 
 doc list walks docs.roots (o-md settings set docs.roots ...; $O_MD_ROOTS overrides) and
@@ -62,7 +62,11 @@ func main() {
 }
 
 func run(argv []string, stdin io.Reader, stdout io.Writer) error {
-	if isShellCommand(argv) {
+	shellArgs, _, err := splitDataArgs(argv)
+	if err != nil {
+		return err
+	}
+	if isShellCommand(shellArgs) {
 		return runShell(argv, stdin, stdout, os.Stderr)
 	}
 	if len(argv) > 0 {

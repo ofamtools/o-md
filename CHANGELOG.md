@@ -3,6 +3,12 @@
 ## Unreleased
 
 - Changed: requires ochazuke v0.122.1 and oden v0.5.0. Uses the current standard document scaffold, typed path/time fields and generated noun actions.
+- Added: the same complete file-backed document store in the catalog CLI and editor: native open, property forms, content edits, rename/move, byte-preserving duplicate, archive/restore, history, yank, persistent relations and standard undo.
+- Changed: documents have stable IDs in the tool data directory; current paths remain human selectors and old paths stop resolving after a move. Path/root props declare file/directory kinds, and modification times use RFC 3339 UTC.
+- Changed: document delete moves the actual file to the system trash with an explicit confirmation, never permanent removal. The OS command runner is injectable; tests use temp trash fixtures.
+- Added: noun-typed editor-in-pane, send-to-pane, send-to-note and project-association actions through host callbacks, with declarative reciprocal actions on receivers.
+- Changed: `doc show` uses the runtime's standard form; `doc open` means o-md's editor and `doc open-with` means a named OS application. Removed the custom clipboard implementation in favor of the runtime's registers.
+- Added: generated settings/bindings/standard-verb reference (`make reference`) and document lifecycle, transport and TUI tests.
 
 ## v0.6.0
 

@@ -917,3 +917,31 @@ move-up	action	seed	ochazuke v0.110
 referrer	noun	seed	ochazuke v0.110
 related	noun	seed	ochazuke v0.110
 related-section	noun	seed	ochazuke v0.110
+act	action	yes	ochazuke focus.act
+add-to-project	action	yes	o-md document project association
+columns	action	seed	ochazuke v0.122.1
+edit-in-pane	action	yes	o-md document host editor
+form-item	noun	yes	ochazuke list-field row
+form-read-only	noun	yes	ochazuke read-only form value
+group-fold	action	yes	ochazuke collection group
+item-add	action	yes	ochazuke list-field row
+item-delete	action	yes	ochazuke list-field row
+item-edit	action	yes	ochazuke list-field row
+item-first	action	yes	ochazuke list-field row
+item-last	action	yes	ochazuke list-field row
+item-move-down	action	yes	ochazuke list-field row
+item-move-up	action	yes	ochazuke list-field row
+item-next	action	yes	ochazuke list-field row
+item-previous	action	yes	ochazuke list-field row
+item-yank	action	yes	ochazuke list-field row
+next-scope	action	seed	ochazuke v0.122.1
+noun-browser	noun	seed	ochazuke v0.122.1
+open-with	action	seed	ochazuke v0.122.1
+opener	noun	yes	ochazuke opener table
+previous-scope	action	seed	ochazuke v0.122.1
+relate	action	yes	ochazuke general relation
+relation-kind	noun	yes	ochazuke declared relation rules
+send-to-note	action	yes	o-md document note transport
+send-to-pane	action	yes	o-md document pane transport
+show-archived	action	seed	ochazuke v0.122.1
+unrelate	action	yes	ochazuke general relation removal
