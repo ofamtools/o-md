@@ -7,6 +7,7 @@ main.go	run	case	"check"	1
 main.go	run	case	"help"	1
 main.go	run	case	"note"	1	Existing standalone command parser; classified after the upgraded runtime added the note noun.
 main.go	run	case	"notes"	1
+main.go	run	case	"scratch"	1	Existing standalone command (o-md scratch), kept as a thin call of doc list --scratch; classified when scratch became that verb's parameter.
 main.go	run	case	"send"	1
 main.go	run	case	"uncheck"	1
 main.go	run	compare	"check"	1

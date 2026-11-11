@@ -77,7 +77,9 @@ type catalogApp struct {
 	list         *ochazuke.Collection
 	now          func() time.Time
 	trash        func(string) error
-	open         func(string) error
+	open         func(openTarget) error
+	shown        bool // open draws the buffer itself (the editor), so doc.open answers nothing
+	stdin        io.Reader
 	moved        func(string, string) error
 	beforeChange func(string) error
 	changed      func(string) error
@@ -99,7 +101,9 @@ func newCatalogApp() (*catalogApp, error) {
 		}
 		return dataDir("")
 	}}
-	c.open = func(path string) error { return run([]string{"--data", c.state.dir(), path}, os.Stdin, os.Stdout) }
+	// Without a launcher (a test, a library use) doc.open only answers the
+	// buffer's record; the command line sets launch, the editor its own.
+	c.open = func(openTarget) error { return nil }
 	r.SetRelationStore(c.state)
 	if err := r.DeclareSetting(ochazuke.Setting{Name: rootsSetting, Type: ochazuke.SettingList, Default: slices.Clone(defaultRoots),
 		Description: "The directories doc list walks for Markdown files (~ is your home); $O_MD_ROOTS (" + string(os.PathListSeparator) + " between) overrides it"}); err != nil {
@@ -136,8 +140,9 @@ func (c *catalogApp) define() {
 	// here, so a host mounts nothing for it.
 	r.DefineOwn(paneNoun)
 	r.Define(docNoun).Columns(docColumns...).Props(docProps()...).Store(c.docStore()).
-		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md)").Rows(docNoun).Fetch().Quiet().
-		Verb("open", c.on(c.openDoc), "Open the document in o-md's rendered Markdown editor, not an OS application").OpensPage(docsPageID).
+		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md); --scratch lists the scratch buffers instead").Rows(docNoun).Fetch().Quiet().
+		Verb("open", c.openAction, "Open PATH in o-md's rendered Markdown editor (not an OS application): a path that does not exist yet is a new, named buffer written on its first change, - reads standard input into a new scratch buffer, and no path is a new scratch buffer").OpensPage(docsPageID).Positional("path").
+		Verb("reopen", c.reopenAction, "Open the newest scratch buffer again (a new one when there is none)").OfCollection().
 		Verb("notes", c.on(c.notes), "The doc's notes: JSON records, or with --format prompt one message for an agent").Fetch().
 		Verb("annotate", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
 		Verb("check", c.on(c.check(true)), "Check the first checklist item holding ITEM").Positional("item").
@@ -149,9 +154,12 @@ func (c *catalogApp) define() {
 		Mode("normal").
 		Bind("g s", ochazuke.Do(docNoun+".send-notes"))
 	params := map[string]map[string]ochazuke.Parameter{
-		"open": {"id": docSubject()},
+		"open": {"path": {Type: ochazuke.PropPath, Path: "file", New: true, Description: "The file to open (~ is your home); it need not exist yet. - is standard input. Without it and without --id: a new scratch buffer"},
+			"id": {Type: "string", Noun: docNoun, Free: true, Description: "A document's stable ID, instead of a path"}},
+		"reopen": {},
 		"list": {"root": {Type: ochazuke.PropPath, Path: "dir", Description: "An additional root to walk"},
-			"archived": {Type: "boolean", Description: "List only archived documents"}},
+			"archived": {Type: "boolean", Description: "List only archived documents"},
+			"scratch":  {Type: "boolean", Description: "List only the scratch buffers (the unnamed buffers under the data directory), newest first"}},
 		"notes": {"id": docSubject(), "format": {Type: "string", Enum: []string{"jsonl", "prompt"}, Description: "jsonl (records, the default) or prompt"},
 			"item": {Type: "string", Description: "Only the notes under the first item holding this"}, "unresolved": {Type: "boolean"}, "unsent": {Type: "boolean"}},
 		"annotate": {"id": docSubject(), "item": {Type: "string", Description: "Add a note under the first item holding this"}, "reply": {Type: "string", Description: "Reply to note ID"},
@@ -178,13 +186,6 @@ func (c *catalogApp) sendNotesAction(ctx ochazuke.Ctx) ochazuke.Result {
 		return c.sendNotesUI(ctx)
 	}
 	return c.on(c.sendNotes)(ctx)
-}
-
-func (c *catalogApp) openDoc(path string, _ ochazuke.Arguments) (any, error) {
-	if err := c.open(path); err != nil {
-		return nil, err
-	}
-	return c.docThing(path)
 }
 
 // on runs a verb on the doc its instance names (--target PATH).
@@ -273,6 +274,13 @@ func splitList(s string) []string {
 // listDocs is doc list: every root's Markdown files (recursively), every
 // project directory's top-level *.md and docs/**/*.md, newest first.
 func (c *catalogApp) listDocs(ctx ochazuke.Ctx) ochazuke.Result {
+	if scratch, _ := ctx.Args["scratch"].(bool); scratch {
+		rows, err := c.scratchRows()
+		if err != nil {
+			return ochazuke.Failed(err)
+		}
+		return ochazuke.Done(rows)
+	}
 	archived, _ := ctx.Args["archived"].(bool)
 	withArchived := archived || !c.r.Settings().Bool("docs.hide-archived")
 	rows, err := c.docRows(ochazuke.StringArg(ctx.Args, "root", ""), archived, withArchived)
@@ -675,6 +683,8 @@ func runShell(argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	c.stdin = stdin
+	c.open = c.launch(editorLaunch{Stdout: stdout})
 	c.r.Config().StateDir = filepath.Join(c.state.dir(), "state")
 	sh := ocli.New(c.r, "o-md", stdin, stdout, stderr)
 	sh.Version = Version

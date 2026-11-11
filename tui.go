@@ -33,9 +33,9 @@ type App struct {
 	noticed bool
 }
 
-// newApp opens path (a missing file is created empty: record first), or
-// with path "" a new scratch buffer under data, created on its first
-// edit.
+// newApp opens path: a file, or one that does not exist yet (a new, named
+// buffer, written on its first change), or with scratch an unnamed scratch
+// buffer under data, also written on its first change.
 func newApp(path, data string, scratch bool) (*App, error) {
 	c, err := newCatalogApp()
 	if err != nil {
@@ -46,28 +46,16 @@ func newApp(path, data string, scratch bool) (*App, error) {
 	r.Config().StateDir = filepath.Join(c.state.dir(), "state")
 	a := &App{r: r, path: path, scratch: scratch, data: data}
 	a.m = ochazuke.NewModel(r)
-	var src markdown.Source
-	if scratch {
-		src = lazySource(path)
-	} else {
-		if !exists(path) {
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return nil, err
-			}
-			if err := markdown.WriteFile(path, ""); err != nil {
-				return nil, err
-			}
-		}
-		src = markdown.File(path)
-	}
 	r.Instance(pageID, ochazuke.Kind(docNoun)).Data = path
-	doc, err := markdown.New(r, mdID, pageID, src, markdown.PreserveNewlines())
+	doc, err := markdown.New(r, mdID, pageID, docSource(path), markdown.PreserveNewlines())
 	if err != nil {
 		return nil, err
 	}
 	a.doc = doc
 	c.pending = func(path string) (string, bool) {
-		if a.scratch && path == a.path {
+		// The open buffer's text is the document while its file is not
+		// written yet (a scratch buffer, a new named one).
+		if path == a.path && (a.scratch || !exists(path)) {
 			return a.doc.Text(), true
 		}
 		return "", false
@@ -81,15 +69,16 @@ func newApp(path, data string, scratch bool) (*App, error) {
 		}
 		return nil
 	}
-	c.open = func(path string) error {
+	c.shown = true
+	c.open = func(t openTarget) error {
 		if err := a.doc.Leave(); err != nil {
 			return err
 		}
-		if err := a.doc.SetSource(markdown.File(path)); err != nil {
+		if err := a.doc.SetSource(docSource(t.Path)); err != nil {
 			return err
 		}
-		a.path, a.scratch = path, false
-		a.r.Instance(pageID).Data = path
+		a.path, a.scratch = t.Path, t.Scratch
+		a.r.Instance(pageID).Data = t.Path
 		a.retitle()
 		return nil
 	}
@@ -97,7 +86,7 @@ func newApp(path, data string, scratch bool) (*App, error) {
 		if a.path != from {
 			return nil
 		}
-		return c.open(to)
+		return c.open(openTarget{Path: to})
 	}
 	c.changed = func(path string) error {
 		if path == a.path {

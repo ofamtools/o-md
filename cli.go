@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ofam.dev/ochazuke"
 	"ofam.dev/ochazuke/markdown"
 )
 
@@ -445,15 +446,31 @@ func sendNotes(path, pane string, now bool, a args) (int, error) {
 	return len(ids), markdown.WriteFile(path, next)
 }
 
-// cmdScratch lists the scratch buffers, newest first.
+// cmdScratch lists the scratch buffers, newest first: doc list --scratch,
+// printed in this command's own format.
 func cmdScratch(in []string, data string, stdout io.Writer) error {
 	a, err := parseArgs(in, "json")
 	if err != nil {
 		return err
 	}
-	files, err := scratchFiles(data)
+	c, err := newCatalogApp()
 	if err != nil {
 		return err
+	}
+	c.data = data
+	v, err := c.r.Execute(ochazuke.Request{Noun: docNoun, Verb: "list", Args: ochazuke.Arguments{"scratch": true}})
+	if err != nil {
+		return err
+	}
+	rows, ok := v.([]docRow)
+	if !ok {
+		return fmt.Errorf("doc list answered %T, not rows", v)
+	}
+	files := make([]scratchFile, 0, len(rows))
+	for _, row := range rows {
+		if f, err := scratchFileAt(row.Path); err == nil {
+			files = append(files, f)
+		}
 	}
 	if a.has("json") {
 		enc := json.NewEncoder(stdout)

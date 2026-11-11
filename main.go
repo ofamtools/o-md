@@ -3,9 +3,10 @@
 // and the block under the cursor is edited as Markdown in place. Every
 // change is written as it is made; there is no save key.
 //
-//	o-md [FILE]            open FILE (created when missing), or a scratch buffer
-//	o-md -r                reopen the newest scratch buffer
-//	o-md scratch [--json]  list the scratch buffers, newest first
+//	o-md [FILE]            open FILE (doc open: written on its first change when
+//	                       it does not exist; - is standard input), or a scratch buffer
+//	o-md -r                reopen the newest scratch buffer (doc reopen)
+//	o-md scratch [--json]  list the scratch buffers, newest first (doc list --scratch)
 //	o-md note FILE ...     add, reply to, edit, resolve or delete a note
 //	o-md notes FILE ...    print the notes (JSON Lines, or --format prompt)
 //	o-md check FILE --item MATCH / o-md uncheck FILE --item MATCH
@@ -19,16 +20,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
-	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
+	"ofam.dev/ochazuke"
 )
 
 const usage = `Usage:
-  o-md [--data DIR] [FILE]       open FILE (created empty when missing); no FILE: a new scratch buffer
-  o-md -r [--data DIR]           reopen the newest scratch buffer
-  o-md scratch [--json]          list scratch buffers, newest first
+  o-md [--data DIR] [FILE]       open FILE (written on its first change when it does not exist yet);
+                                 - reads standard input; no FILE: a new scratch buffer   (= o-md doc open [FILE])
+  o-md -r [--data DIR]           reopen the newest scratch buffer                        (= o-md doc reopen)
+  o-md scratch [--json]          list scratch buffers, newest first                      (= o-md doc list --scratch)
   o-md note FILE --item MATCH [--author NAME] TEXT     add a note under the first item holding MATCH
   o-md note FILE --reply ID [--author NAME] TEXT       add a note right after note ID
   o-md note FILE --edit ID TEXT | --resolve ID | --unresolve ID | --delete ID
@@ -97,37 +97,20 @@ func run(argv []string, stdin io.Reader, stdout io.Writer) error {
 	if len(a.pos) > 1 {
 		return errUsage
 	}
-	data := dataDir(a.flags["data"])
-	path, scratch := "", false
-	switch {
-	case a.has("r"):
-		files, err := scratchFiles(data)
-		if err != nil {
-			return err
-		}
-		if len(files) == 0 {
-			return errors.New("no scratch buffers to reopen")
-		}
-		path, scratch = files[0].Path, true
-	case len(a.pos) == 1:
-		if path, err = expand(a.pos[0]); err != nil {
-			return err
-		}
-	default:
-		path, scratch = newScratchPath(data, time.Now()), true
+	// The bare forms are the doc verbs: o-md [FILE] is doc open [FILE] and
+	// o-md -r is doc reopen, run on the catalog's runtime.
+	q := ochazuke.Request{Noun: docNoun, Verb: "open", Args: ochazuke.Arguments{}}
+	if a.has("r") {
+		q.Verb = "reopen"
+	} else if len(a.pos) == 1 {
+		q.Args["path"] = a.pos[0]
 	}
-	app, err := newApp(path, data, scratch)
+	c, err := newCatalogApp()
 	if err != nil {
 		return err
 	}
-	if a.has("smoke") {
-		app.m.Width, app.m.Height = 80, 24
-		fmt.Fprintln(stdout, ansi.Strip(app.m.View().Content))
-		return nil
-	}
-	_, err = tea.NewProgram(app.m).Run()
-	if lerr := app.doc.Leave(); err == nil {
-		err = lerr
-	}
+	c.data, c.stdin = a.flags["data"], stdin
+	c.open = c.launch(editorLaunch{Smoke: a.has("smoke"), Stdout: stdout})
+	_, err = c.r.Execute(q)
 	return err
 }

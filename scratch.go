@@ -71,12 +71,39 @@ func lazySource(path string) markdown.Source {
 	}
 }
 
+// docSource is the source of the buffer at path: the file when it exists,
+// else one written on the first change.
+func docSource(path string) markdown.Source {
+	if exists(path) {
+		return markdown.File(path)
+	}
+	return lazySource(path)
+}
+
 // scratchFile is one scratch buffer as o-md scratch lists it.
 type scratchFile struct {
 	Path     string    `json:"path"`
 	Modified time.Time `json:"modified"`
 	Size     int64     `json:"size"`
 	First    string    `json:"first"` // its first nonblank line
+}
+
+// scratchFileAt is the scratch buffer in the file at path.
+func scratchFileAt(path string) (scratchFile, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return scratchFile{}, err
+	}
+	f := scratchFile{Path: path, Modified: info.ModTime(), Size: info.Size()}
+	if b, err := os.ReadFile(path); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if t := strings.TrimSpace(line); t != "" {
+				f.First = t
+				break
+			}
+		}
+	}
+	return f, nil
 }
 
 // scratchFiles lists the scratch buffers, newest first.
@@ -93,21 +120,9 @@ func scratchFiles(data string) ([]scratchFile, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		info, err := e.Info()
-		if err != nil {
-			continue
+		if f, err := scratchFileAt(filepath.Join(scratchDir(data), e.Name())); err == nil {
+			out = append(out, f)
 		}
-		path := filepath.Join(scratchDir(data), e.Name())
-		f := scratchFile{Path: path, Modified: info.ModTime(), Size: info.Size()}
-		if b, err := os.ReadFile(path); err == nil {
-			for _, line := range strings.Split(string(b), "\n") {
-				if t := strings.TrimSpace(line); t != "" {
-					f.First = t
-					break
-				}
-			}
-		}
-		out = append(out, f)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if !out[i].Modified.Equal(out[j].Modified) {
