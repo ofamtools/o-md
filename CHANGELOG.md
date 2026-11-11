@@ -14,6 +14,12 @@
 - Fixed: duplicating an archived source creates a visible, unarchived full-content copy. Multi-prop edits compute their final path/name/archive destination before moving, so a destination collision leaves the original file and identity unchanged.
 - Fixed: if an atomic content write fails after a combined move/edit, restore the original location and identity before returning the write/rollback errors.
 - Changed: `doc new` is an alias of the runtime-generated `doc create`; both use Store.Create and preserve positional name/root and named flags. Removed the redundant application creation handler.
+- Added: the command line's entry points are verbs, reachable in noun verb form, from the editor's palette and mounted in a host. `doc open [PATH]` takes a typed file path (positional) or `--id`; `doc reopen` opens the newest scratch buffer; `doc list --scratch` lists the scratch buffers. The bare `o-md [FILE]`, `o-md -r` and `o-md scratch` stay and only run these verbs.
+- Changed: opening never refuses. A path with no file yet opens as a new, named buffer and the file is written on its first change; before, `o-md FILE` created an empty file on opening. With nothing named `doc open` is a new scratch buffer (also from the palette, where it used to need a document). `o-md -r` and `doc reopen` with no scratch buffer open a new one instead of failing.
+- Added: `doc open -` and `o-md -` read standard input into a new scratch buffer, written at once. The handler reads through one `io.Reader` seam (`docInput`) that the library's shared input-source parameter can replace; `!COMMAND` and output sinks are not built here.
+- Changed: without a terminal (a host's job, a pipe) `doc open` and `doc reopen` start no editor and answer the buffer's record (`path`, `name`, `scratch`, `saved`, `origin`); `doc open` no longer answers the whole document.
+- Known gaps, in the library and host, not worked around here: a host's native open of a path with no file yet fails at its `doc get` (and its Markdown detail opens files with `markdown.File`, which needs the file); a mounted verb that opens a page cannot name its own subject, so `md.doc open` alone only opens the Docs page and `md.doc reopen` answers the record without opening it; a host does not pass standard input to a mounted verb.
+- Fixed: the README said delete was archive-first by default; `delete.archive` is off by default, so `doc delete` asks and then moves the file to the system trash.
 
 ## v0.6.0
 

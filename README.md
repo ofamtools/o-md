@@ -32,11 +32,17 @@ mtm extension register md        # mounts the Docs page and the doc.* verbs in m
 ## Usage
 
 ```sh
-o md plan.md                     # open plan.md (created empty when missing)
+o md plan.md                     # open plan.md; a file that does not exist yet is written on its first change
 o md                             # a new scratch buffer; :save-as PATH names it
+o md -                           # standard input in a new scratch buffer (some-command | o md -)
 o md -r                          # reopen the newest scratch buffer
 o md scratch [--json]            # list scratch buffers, newest first
 ```
+
+Each of these is a `doc` verb, and the bare form only calls it: `o md [FILE]`
+is `o md doc open [FILE]`, `o md -r` is `o md doc reopen` and `o md scratch`
+is `o md doc list --scratch`. The verbs are in the editor's palette
+(`: doc open PATH`) and, mounted, in mtm (`md.doc open PATH`).
 
 Notes and checklists from the command line:
 
@@ -95,7 +101,10 @@ o md doc show|get|edit|delete|archive|restore|duplicate|yank|history --target ID
 o md doc rename NEW_NAME --target ID_OR_PATH
 o md doc move DESTINATION.md --target ID_OR_PATH
 o md doc set --target ID_OR_PATH --props '{"content": "# Updated\n"}'
-o md doc reveal|yank-path|open --target ID_OR_PATH
+o md doc open [PATH|-] [--id ID]  # the editor: a path with no file yet, standard input, or a new scratch buffer
+o md doc reopen                  # the newest scratch buffer again
+o md doc list --scratch          # the scratch buffers, newest first
+o md doc reveal|yank-path --target ID_OR_PATH
 o md doc open-with --with "Visual Studio Code" --target ID_OR_PATH
 o md doc edit-in-pane --target ID_OR_PATH
 o md doc send-to-pane PANE --target ID_OR_PATH
@@ -126,12 +135,28 @@ Set `docs.hide-archived` to `false` to include them in the normal list.
 The standard `show` opens the document's property form in a TUI; `open` opens
 its rendered Markdown editor. `open-with` is deliberately different: it uses
 the named OS application through `--with`.
+
+`doc open` never refuses. `PATH` need not exist: the buffer has that name and
+the file (and its directories) are written on the first change, not on
+opening. `-` reads standard input into a new scratch buffer, written at once
+so piped text is never lost. With nothing named (no `PATH`, no `--id`, no
+`--target` row) it opens a new scratch buffer, also from the editor's
+palette, where the buffer already open is not a subject. `doc reopen` opens
+the newest scratch buffer, or a new one when there is none. On a terminal
+these start the editor; without one (a host's job, a pipe) they answer the
+buffer's record (`path`, `name`, `scratch`, `saved`, and `origin` for
+standard input) and start nothing. Mounted in mtm, `md.doc open PATH` opens
+the Docs page on that document; the host reads the record through `doc get`,
+so there a path with no file yet is still an error, `md.doc open` alone opens
+the Docs page, and `md.doc reopen` answers the newest scratch buffer's record
+(see the CHANGELOG for the library gaps).
 The same typed path supplies `reveal` and `yank-path` in both standalone and
 mounted runtimes (`paths.free-verbs`, default on).
 
-Deletion is archive-first by default (`delete.archive`). To go straight to
-the system trash, use `doc delete --archive-first=false --target ID --yes`.
-The confirmation explicitly names the system trash. macOS uses Finder;
+`doc delete` moves the file to the system trash, after a confirmation that
+says so; it never unlinks. With `delete.archive` on (default off) or
+`--archive-first`, a live document is archived instead and only an archived
+one goes to the trash. macOS uses Finder;
 Linux requires `gio`. Failure to contact the trash service leaves the file
 in place; there is no permanent-delete fallback. Agents are directed to
 archive rather than destructive deletion.
@@ -171,7 +196,10 @@ detail with `detail.show-form=false`; the inherited Nouns tab with
 
 | Vim form | Help tag | o-md |
 |---|---|---|
-| `:edit FILE` | `:help :edit` | Similar: `doc open` opens the rendered file; missing files opened directly are recorded immediately. |
+| `:edit FILE` | `:help :edit` | Similar: `doc open PATH` opens the rendered file. As in Vim, a file that does not exist is a new named buffer, written on its first change (Vim: on `:w`). |
+| `:enew` | `:help :enew` | Similar: `doc open` with nothing named is a new scratch buffer. Different from `:edit` alone, which re-reads the current file: every change is already written, so there is nothing to re-read. |
+| `vim -` | `:help --` | Same: `doc open -` (and `o md -`) reads standard input into a new buffer. Different: the text is written to a scratch file at once. |
+| `:buffer #`, `:ls` | `:help :buffer`, `:help :ls` | Not applicable as such: o-md holds one buffer. `doc reopen` is the newest scratch buffer and `doc list --scratch` lists them, across runs. |
 | `:file NAME` | `:help :file` | Different: `doc rename` renames the actual file, preserving its document ID. |
 | `:undo` | `:help undo` | Same intent: editor undo changes text; runtime history undo reverses document-store changes. |
 | `:!$EDITOR FILE` | `:help :!` | Different: `edit-in-pane` uses argv in a host pane, never shell evaluation. |
