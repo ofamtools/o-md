@@ -12,4 +12,4 @@
 - `testdata/lexicon-words.tsv`, `testdata/namecheck.txt`: app vocabulary and reviewed parser-boundary declarations used by the existing naming gates.
 - `reference_test.go`, `Makefile`: canonical ochazuke reference generation and stale-reference checking for `docs/reference/`.
 - `document_actions_test.go`, `catalog_test.go`, `main_test.go`: document lifecycle, host transport, fake trash/openers, catalog routes and editor behavior.
-- `file_ops_test.go`: competing create/duplicate/move operations, real-file rollback when metadata persistence fails, archived-source duplication and failed multi-prop destination edits.
+- `file_ops_test.go`: competing create/duplicate/move operations, real-file rollback when metadata persistence fails, archived-source duplication, failed multi-prop destination edits and atomic-content-write failure after a move.

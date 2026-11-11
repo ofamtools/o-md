@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"ofam.dev/ochazuke"
-	"ofam.dev/ochazuke/markdown"
 )
 
 // The document store owns filesystem effects; the runtime supplies the
@@ -122,6 +121,7 @@ func (c *catalogApp) patchThing(_ ochazuke.Ctx, id string, t ochazuke.Thing) (oc
 	if err != nil {
 		return nil, err
 	}
+	originalPath := path
 	pending := false
 	if c.pending != nil {
 		_, pending = c.pending(path)
@@ -152,7 +152,14 @@ func (c *catalogApp) patchThing(_ ochazuke.Ctx, id string, t ochazuke.Thing) (oc
 				return nil, err
 			}
 		}
-		if err := markdown.WriteFile(path, src); err != nil {
+		if err := c.writeContent(path, src); err != nil {
+			if path != originalPath {
+				rollbackErr := c.state.move(path, originalPath)
+				if rollbackErr == nil && c.moved != nil {
+					rollbackErr = c.moved(path, originalPath)
+				}
+				return nil, errors.Join(err, rollbackErr)
+			}
 			return nil, err
 		}
 	}

@@ -275,3 +275,44 @@ func TestDocumentFailedMultiPropPatchLeavesOriginal(t *testing.T) {
 		t.Fatalf("failed multi-prop patch changed identity: %v", current)
 	}
 }
+
+func TestDocumentContentWriteFailureRollsBackMove(t *testing.T) {
+	root, _ := docEnv(t)
+	c, err := newCatalogApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "plan.md")
+	destination := filepath.Join(root, "failed-write.md")
+	original := read(t, source)
+	thing, err := c.docThing(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := thing["id"].(string)
+	executeDoc(t, c, "relate", id, ochazuke.Arguments{"to": "project:p1", "kind": "document"})
+	failure := errors.New("injected atomic content-write failure")
+	c.writeContent = func(string, string) error { return failure }
+	_, err = c.r.Execute(ochazuke.Request{Noun: docNoun, Verb: "set", Args: ochazuke.Arguments{
+		"id": id, "props": map[string]any{"path": destination, "content": "# Must not replace original\n"},
+	}})
+	if !errors.Is(err, failure) {
+		t.Fatalf("content write: %v", err)
+	}
+	if exists(destination) || read(t, source) != original {
+		t.Fatal("a failed content write left the document moved or changed")
+	}
+	current := docRecord(t, executeDoc(t, c, "get", id, nil))
+	if current["id"] != id || current["path"] != source {
+		t.Fatalf("a failed content write left the identity moved: %v", current)
+	}
+	relations, err := c.state.Relations(ochazuke.RelationQuery{Thing: ochazuke.AnyRef(docNoun, id)})
+	if err != nil || len(relations) != 1 || relations[0].To != "project:p1" {
+		t.Fatalf("relations after failed content write: %v %v", relations, err)
+	}
+	for _, entry := range c.r.History(0) {
+		if entry.Request.Verb == "set" && entry.Result.OK {
+			t.Fatal("a failed content write recorded a successful set")
+		}
+	}
+}

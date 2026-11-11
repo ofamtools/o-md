@@ -82,6 +82,7 @@ type catalogApp struct {
 	beforeChange func(string) error
 	changed      func(string) error
 	deleted      func(string) error
+	writeContent func(string, string) error
 	sendNotesUI  func(ochazuke.Ctx) ochazuke.Result
 	pending      func(string) (string, bool)
 	state        *documentState
@@ -91,7 +92,7 @@ type catalogApp struct {
 func newCatalogApp() (*catalogApp, error) {
 	r := ochazuke.NewRuntime()
 	r.Config().App = "o-md"
-	c := &catalogApp{r: r, now: time.Now, trash: systemTrash}
+	c := &catalogApp{r: r, now: time.Now, trash: systemTrash, writeContent: markdown.WriteFile}
 	c.state = &documentState{dir: func() string {
 		if c.data != "" {
 			return c.data
