@@ -10,6 +10,8 @@
 - Changed: `doc show` uses the runtime's standard form; `doc open` means o-md's editor and `doc open-with` means a named OS application. Removed the custom clipboard implementation in favor of the runtime's registers.
 - Added: generated settings/bindings/standard-verb reference (`make reference`) and document lifecycle, transport and TUI tests.
 - Fixed: one-shot document commands now opt into the shared runtime history and flush it before exit; CLI and TUI history share the tool data directory. The runtime's existing retention and value-privacy rules still apply.
+- Fixed: concurrent creation and duplication claim filenames exclusively; moves of regular documents use same-filesystem no-replace link/unlink. Failed create, move and undo-restore metadata commits roll their file changes back before releasing the metadata lock.
+- Fixed: duplicating an archived source creates a visible, unarchived full-content copy. Multi-prop edits compute their final path/name/archive destination before moving, so a destination collision leaves the original file and identity unchanged.
 
 ## v0.6.0
 

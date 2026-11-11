@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"os"
 
@@ -134,31 +135,15 @@ func (c *catalogApp) patchThing(_ ochazuke.Ctx, id string, t ochazuke.Thing) (oc
 			return nil, err
 		}
 	}
-	if dest, ok := t["path"].(string); ok && dest != path {
-		if _, err := c.renameDoc(path, ochazuke.Arguments{"to": dest}); err != nil {
+	destination, err := c.patchDestination(path, t)
+	if err != nil {
+		return nil, err
+	}
+	if destination != path {
+		if _, err := c.renameDoc(path, ochazuke.Arguments{"to": destination}); err != nil {
 			return nil, err
 		}
-		path = c.renamedPath(path, dest)
-	}
-	// Archive first: the name is then the file in its new place.
-	if v, ok := t["archived"]; ok {
-		want, _ := v.(bool)
-		if _, in := c.archiveRoot(path); in != want {
-			if _, err := c.moveToArchive(path, !want); err != nil {
-				return nil, err
-			}
-			path = c.archivedPath(path, !want)
-		}
-	}
-	if v, ok := t["name"]; ok {
-		to, _ := v.(string)
-		if to == "" {
-			return nil, errors.New("a doc needs a name")
-		}
-		if _, err := c.renameDoc(path, ochazuke.Arguments{"to": to}); err != nil {
-			return nil, err
-		}
-		path = c.renamedPath(path, to)
+		path = destination
 	}
 	if v, ok := t["content"]; ok {
 		src, _ := v.(string)
@@ -182,24 +167,16 @@ func (c *catalogApp) patchThing(_ ochazuke.Ctx, id string, t ochazuke.Thing) (oc
 func (c *catalogApp) createThing(t ochazuke.Thing) (ochazuke.Thing, error) {
 	name, _ := t["name"].(string)
 	root, _ := t["root"].(string)
+	source, hasContent := t["content"].(string)
+	var content *string
+	if hasContent {
+		content = &source
+	}
 	var path string
 	if id, _ := t["id"].(string); id != "" {
 		var err error
-		path, err = c.state.restorePath(id)
+		path, err = c.state.restore(id, source)
 		if err != nil {
-			return nil, err
-		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return nil, err
-		}
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-		if err != nil {
-			return nil, err
-		}
-		if err := f.Close(); err != nil {
-			return nil, err
-		}
-		if err := c.state.restored(id); err != nil {
 			return nil, err
 		}
 	} else {
@@ -213,24 +190,17 @@ func (c *catalogApp) createThing(t ochazuke.Thing) (ochazuke.Thing, error) {
 				name = filepath.Base(path)
 			}
 		}
-		row, err := c.makeDoc(name, root)
+		archived, _ := t["archived"].(bool)
+		var err error
+		root, err = c.creationDirectory(root, archived)
+		if err != nil {
+			return nil, err
+		}
+		row, err := c.makeDoc(name, root, content)
 		if err != nil {
 			return nil, err
 		}
 		path = row.Path
-	}
-	if src, ok := t["content"].(string); ok {
-		if err := markdown.WriteFile(path, src); err != nil {
-			return nil, err
-		}
-	}
-	if archived, _ := t["archived"].(bool); archived {
-		if _, in := c.archiveRoot(path); !in {
-			if _, err := c.moveToArchive(path, false); err != nil {
-				return nil, err
-			}
-			path = c.archivedPath(path, false)
-		}
 	}
 	if c.changed != nil {
 		if err := c.changed(path); err != nil {
@@ -238,6 +208,46 @@ func (c *catalogApp) createThing(t ochazuke.Thing) (ochazuke.Thing, error) {
 		}
 	}
 	return c.docThing(path)
+}
+
+func (c *catalogApp) patchDestination(path string, props ochazuke.Thing) (string, error) {
+	dest := path
+	for _, field := range []string{"path", "name"} {
+		if raw, ok := props[field]; ok {
+			value, _ := raw.(string)
+			value = strings.TrimSpace(value)
+			if value == "" {
+				return "", fmt.Errorf("a doc needs a %s", field)
+			}
+			dest = c.renamedPath(dest, value)
+		}
+	}
+	if raw, ok := props["archived"]; ok {
+		archived, _ := raw.(bool)
+		if _, in := c.archiveRoot(dest); in != archived {
+			dest = c.archivedPath(dest, !archived)
+		}
+	}
+	return dest, nil
+}
+
+func (c *catalogApp) creationDirectory(root string, archived bool) (string, error) {
+	if root == "" {
+		roots := c.roots("")
+		if len(roots) == 0 {
+			return "", errors.New("no docs root: pass root or set " + rootsSetting)
+		}
+		root = roots[0]
+	}
+	dir, err := expand(root)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "document.md")
+	if _, in := c.archiveRoot(path); in != archived {
+		path = c.archivedPath(path, !archived)
+	}
+	return filepath.Dir(path), nil
 }
 
 // renamedPath is where renameDoc puts path for to.

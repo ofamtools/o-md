@@ -432,14 +432,14 @@ func (c *catalogApp) rootOf(path string) string {
 // newDoc is doc new (and the standard create): record first, the file is
 // made at once (a name taken gets -2, -3, ...).
 func (c *catalogApp) newDoc(ctx ochazuke.Ctx) ochazuke.Result {
-	row, err := c.makeDoc(ochazuke.StringArg(ctx.Args, "name", ""), ochazuke.StringArg(ctx.Args, "root", ""))
+	row, err := c.makeDoc(ochazuke.StringArg(ctx.Args, "name", ""), ochazuke.StringArg(ctx.Args, "root", ""), nil)
 	if err != nil {
 		return ochazuke.Failed(err)
 	}
 	return ochazuke.Done(row)
 }
 
-func (c *catalogApp) makeDoc(name, root string) (docRow, error) {
+func (c *catalogApp) makeDoc(name, root string, content *string) (docRow, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = "untitled-" + c.now().Format("20060102-150405")
@@ -459,17 +459,39 @@ func (c *catalogApp) makeDoc(name, root string) (docRow, error) {
 		return docRow{}, err
 	}
 	base := strings.TrimSuffix(name, ".md")
-	path := filepath.Join(dir, base+".md")
-	for n := 2; exists(path); n++ {
-		path = filepath.Join(dir, fmt.Sprintf("%s-%d.md", base, n))
+	text := "# " + base + "\n"
+	if content != nil {
+		text = *content
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return docRow{}, err
 	}
-	if err := markdown.WriteFile(path, "# "+base+"\n"); err != nil {
-		return docRow{}, err
-	}
-	return c.rowOf(dir, path)
+	var row docRow
+	err = c.state.transaction(true, func(state *documentRecords) error {
+		path := filepath.Join(dir, base+".md")
+		for n := 2; ; n++ {
+			err := writeNewDocument(path, text)
+			if errors.Is(err, os.ErrExist) {
+				path = filepath.Join(dir, fmt.Sprintf("%s-%d.md", base, n))
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			state.rollback = func() error { return os.Remove(path) }
+			row, err = c.rawRow(dir, path)
+			if err != nil {
+				return err
+			}
+			rows := []docRow{row}
+			if err := state.identify(rows); err != nil {
+				return err
+			}
+			row = rows[0]
+			return nil
+		}
+	})
+	return row, err
 }
 
 func (c *catalogApp) renameDoc(path string, args ochazuke.Arguments) (any, error) {
@@ -493,12 +515,6 @@ func (c *catalogApp) renameDoc(path string, args ochazuke.Arguments) (any, error
 	if dest == path {
 		return c.rowOf(c.rootOf(path), path)
 	}
-	if exists(dest) {
-		return nil, fmt.Errorf("%s exists; not renamed", tilde(dest))
-	}
-	if !exists(path) {
-		return nil, fmt.Errorf("%s: no such file", tilde(path))
-	}
 	if c.beforeChange != nil {
 		if err := c.beforeChange(path); err != nil {
 			return nil, err
@@ -507,11 +523,8 @@ func (c *catalogApp) renameDoc(path string, args ochazuke.Arguments) (any, error
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.Rename(path, dest); err != nil {
-		return nil, err
-	}
 	if err := c.state.move(path, dest); err != nil {
-		return nil, errors.Join(err, os.Rename(dest, path))
+		return nil, err
 	}
 	if c.moved != nil {
 		if err := c.moved(path, dest); err != nil {

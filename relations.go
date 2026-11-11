@@ -18,12 +18,14 @@ import (
 // Adapted from o-json's documentState: identities and relations are metadata,
 // never edits to the source Markdown. Transactions reload under an advisory lock.
 type documentState struct {
-	dir func() string
-	mu  sync.Mutex
+	dir     func() string
+	mu      sync.Mutex
+	replace func(string, string) error
 }
 type documentRecords struct {
 	Docs      map[string]documentRecord `json:"docs"`
 	changed   bool
+	rollback  func() error
 	Relations []ochazuke.Relation `json:"relations"`
 }
 type documentRecord struct {
@@ -31,7 +33,7 @@ type documentRecord struct {
 	Trashed bool   `json:"trashed,omitempty"`
 }
 
-func (s *documentState) transaction(write bool, fn func(*documentRecords) error) error {
+func (s *documentState) transaction(write bool, fn func(*documentRecords) error) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	dir := s.dir()
@@ -48,6 +50,11 @@ func (s *documentState) transaction(write bool, fn func(*documentRecords) error)
 	}
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 	state := documentRecords{}
+	defer func() {
+		if err != nil && state.rollback != nil {
+			err = errors.Join(err, state.rollback())
+		}
+	}()
 	path := filepath.Join(dir, "documents.json")
 	b, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -83,35 +90,40 @@ func (s *documentState) transaction(write bool, fn func(*documentRecords) error)
 	if err := tmp.Close(); err != nil {
 		return err
 	}
+	if s.replace != nil {
+		return s.replace(tmp.Name(), path)
+	}
 	return os.Rename(tmp.Name(), path)
 }
 func (s *documentState) identify(rows []docRow) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	return s.transaction(true, func(state *documentRecords) error {
-		byPath := make(map[string]string, len(state.Docs))
-		for id, doc := range state.Docs {
-			if !doc.Trashed {
-				byPath[doc.Path] = id
-			}
+	return s.transaction(true, func(state *documentRecords) error { return state.identify(rows) })
+}
+
+func (state *documentRecords) identify(rows []docRow) error {
+	byPath := make(map[string]string, len(state.Docs))
+	for id, doc := range state.Docs {
+		if !doc.Trashed {
+			byPath[doc.Path] = id
 		}
-		for i := range rows {
-			id := byPath[rows[i].Path]
-			if id == "" {
-				var buf [16]byte
-				if _, err := rand.Read(buf[:]); err != nil {
-					return err
-				}
-				id = "md-" + hex.EncodeToString(buf[:])
-				state.Docs[id] = documentRecord{Path: rows[i].Path}
-				state.changed = true
-				byPath[rows[i].Path] = id
+	}
+	for i := range rows {
+		id := byPath[rows[i].Path]
+		if id == "" {
+			var buf [16]byte
+			if _, err := rand.Read(buf[:]); err != nil {
+				return err
 			}
-			rows[i].ID = id
+			id = "md-" + hex.EncodeToString(buf[:])
+			state.Docs[id] = documentRecord{Path: rows[i].Path}
+			state.changed = true
+			byPath[rows[i].Path] = id
 		}
-		return nil
-	})
+		rows[i].ID = id
+	}
+	return nil
 }
 func (s *documentState) path(id string) (string, error) {
 	var path string
@@ -136,12 +148,24 @@ func (s *documentState) path(id string) (string, error) {
 }
 func (s *documentState) move(from, to string) error {
 	return s.transaction(true, func(state *documentRecords) error {
+		for _, doc := range state.Docs {
+			if doc.Path == to && !doc.Trashed {
+				return fmt.Errorf("%s already belongs to another document", to)
+			}
+		}
+		if err := moveDocument(from, to); err != nil {
+			return err
+		}
+		state.rollback = func() error { return moveDocument(to, from) }
 		for id, doc := range state.Docs {
 			if doc.Path == from && !doc.Trashed {
 				doc.Path = to
 				state.Docs[id] = doc
 				state.changed = true
 			}
+		}
+		if !state.changed {
+			return state.identify([]docRow{{Path: to}})
 		}
 		return nil
 	})
@@ -191,26 +215,25 @@ func (s *documentState) markTrashed(path string) error {
 		return nil
 	})
 }
-func (s *documentState) restorePath(id string) (string, error) {
+func (s *documentState) restore(id, text string) (string, error) {
 	var path string
-	err := s.transaction(false, func(state *documentRecords) error { path = state.Docs[id].Path; return nil })
-	if err != nil {
-		return "", err
-	}
-	if path == "" {
-		return "", fmt.Errorf("unknown document %s", id)
-	}
-	return path, nil
-}
-func (s *documentState) restored(id string) error {
-	return s.transaction(true, func(state *documentRecords) error {
+	err := s.transaction(true, func(state *documentRecords) error {
 		doc, ok := state.Docs[id]
-		if !ok {
-			return fmt.Errorf("unknown document %s", id)
+		if !ok || !doc.Trashed {
+			return fmt.Errorf("document %s is not in the system trash", id)
 		}
+		path = doc.Path
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := writeNewDocument(path, text); err != nil {
+			return err
+		}
+		state.rollback = func() error { return os.Remove(path) }
 		doc.Trashed = false
 		state.Docs[id] = doc
 		state.changed = true
 		return nil
 	})
+	return path, err
 }

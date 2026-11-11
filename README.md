@@ -113,6 +113,10 @@ host's project directories (`$MTM_PROJECT_DIRS`: each one's top-level `*.md`
 and `docs/**/*.md`). Rows show title, root, modified time, open tasks and open
 notes. `doc archive` moves a file to `<root>/.archive/<relative path>` and
 `doc restore` moves it back. Both refuse to overwrite an existing file.
+Creation and duplication claim filenames exclusively. Moves use same-filesystem
+no-replace links for regular files and fail across filesystems without copying.
+Failed create, move and undo-restore metadata commits roll their file changes
+back before another app transaction can use that path.
 The default list skips `.archive`; `--archived` lists only archived files.
 Set `docs.hide-archived` to `false` to include them in the normal list.
 The standard `show` opens the document's property form in a TUI; `open` opens
