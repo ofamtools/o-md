@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -313,6 +315,24 @@ func TestDocumentContentWriteFailureRollsBackMove(t *testing.T) {
 	for _, entry := range c.r.History(0) {
 		if entry.Request.Verb == "set" && entry.Result.OK {
 			t.Fatal("a failed content write recorded a successful set")
+		}
+	}
+}
+
+func TestDocumentNewAliasPreservesCreationArguments(t *testing.T) {
+	root, _ := docEnv(t)
+	for _, args := range [][]string{
+		{"doc", "new", "Positional name", root},
+		{"doc", "new", "--name", "Flag name", "--root", root},
+		{"doc", "create", "--name", "Canonical name", "--root", root},
+	} {
+		var created ochazuke.Thing
+		if err := json.Unmarshal([]byte(mustShell(t, args...)), &created); err != nil {
+			t.Fatal(err)
+		}
+		path := created["path"].(string)
+		if filepath.Dir(path) != root || read(t, path) != "# "+strings.TrimSuffix(filepath.Base(path), ".md")+"\n" {
+			t.Fatalf("creation arguments did not reach the shared store: %v", created)
 		}
 	}
 }

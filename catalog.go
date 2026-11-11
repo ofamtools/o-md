@@ -115,6 +115,9 @@ func newCatalogApp() (*catalogApp, error) {
 		return nil, err
 	}
 	c.define()
+	if err := r.AliasAction(docNoun+".new", docNoun+".create"); err != nil {
+		return nil, err
+	}
 	if err := ocli.DeclarePage(r, docsPage()); err != nil {
 		return nil, err
 	}
@@ -135,7 +138,6 @@ func (c *catalogApp) define() {
 	r.Define(docNoun).Columns(docColumns...).Props(docProps()...).Store(c.docStore()).
 		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md)").Rows(docNoun).Fetch().Quiet().
 		Verb("open", c.on(c.openDoc), "Open the document in o-md's rendered Markdown editor, not an OS application").OpensPage(docsPageID).
-		Verb("new", c.newDoc, "Create a doc: NAME.md under ROOT (default the first docs root), a heading of its name; no name is an untitled doc").Positional("name", "root").Creates().
 		Verb("notes", c.on(c.notes), "The doc's notes: JSON records, or with --format prompt one message for an agent").Fetch().
 		Verb("annotate", c.on(c.note), "Add a note under the first item holding ITEM, reply to one, or edit, resolve, unresolve or delete one by id").Positional("text").
 		Verb("check", c.on(c.check(true)), "Check the first checklist item holding ITEM").Positional("item").
@@ -150,8 +152,6 @@ func (c *catalogApp) define() {
 		"open": {"id": docSubject()},
 		"list": {"root": {Type: ochazuke.PropPath, Path: "dir", Description: "An additional root to walk"},
 			"archived": {Type: "boolean", Description: "List only archived documents"}},
-		"new": {"name": {Type: "string", Description: "The doc's name (its file NAME.md); none is untitled-TIME"},
-			"root": {Type: ochazuke.PropPath, Path: "dir", New: true, Description: "The directory it goes in; default the first docs root"}},
 		"notes": {"id": docSubject(), "format": {Type: "string", Enum: []string{"jsonl", "prompt"}, Description: "jsonl (records, the default) or prompt"},
 			"item": {Type: "string", Description: "Only the notes under the first item holding this"}, "unresolved": {Type: "boolean"}, "unsent": {Type: "boolean"}},
 		"annotate": {"id": docSubject(), "item": {Type: "string", Description: "Add a note under the first item holding this"}, "reply": {Type: "string", Description: "Reply to note ID"},
@@ -168,6 +168,9 @@ func (c *catalogApp) define() {
 		r.Operations.Set(op)
 	}
 	c.documentActions()
+	create := r.Operations.At(ochazuke.Key(docNoun + ".create"))
+	create.Positional = []string{"name", "root", "pairs"}
+	r.Operations.Set(create)
 }
 
 func (c *catalogApp) sendNotesAction(ctx ochazuke.Ctx) ochazuke.Result {
@@ -428,16 +431,6 @@ func (c *catalogApp) rootOf(path string) string {
 		}
 	}
 	return filepath.Dir(path)
-}
-
-// newDoc is doc new (and the standard create): record first, the file is
-// made at once (a name taken gets -2, -3, ...).
-func (c *catalogApp) newDoc(ctx ochazuke.Ctx) ochazuke.Result {
-	row, err := c.makeDoc(ochazuke.StringArg(ctx.Args, "name", ""), ochazuke.StringArg(ctx.Args, "root", ""), nil)
-	if err != nil {
-		return ochazuke.Failed(err)
-	}
-	return ochazuke.Done(row)
 }
 
 func (c *catalogApp) makeDoc(name, root string, content *string) (docRow, error) {

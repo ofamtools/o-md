@@ -106,6 +106,10 @@ o md doc notes|annotate|check|uncheck|send-notes --target ID_OR_PATH ...
 o md doc --help                  # every verb and its parameters
 ```
 
+`doc new` is an alias of the runtime-generated `doc create`, not a separate
+creation handler. Both use the declared store and accept positional name/root
+or `--name` and `--root`.
+
 `doc list` walks the folders configured in `docs.roots`
 (`$O_MD_ROOTS` overrides; set it with
 `o md setting set docs.roots '["~/notes"]'`) and the

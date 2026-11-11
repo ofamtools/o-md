@@ -312,6 +312,12 @@ func TestCatalog(t *testing.T) {
 		}
 		for _, v := range n.Verbs {
 			verbs = append(verbs, v.Name)
+			for _, alias := range v.Aliases {
+				verbs = append(verbs, alias.Verb)
+			}
+			if v.Name == "create" && (v.Standard != "create" || strings.Join(v.Positional, ",") != "name,root,pairs") {
+				t.Fatalf("creation is not the runtime verb with document positional metadata: %+v", v)
+			}
 			if v.Name == "send-notes" && v.Params["pane"].Noun != "pane" {
 				t.Fatalf("send-notes pane = %+v", v.Params["pane"])
 			}
@@ -320,7 +326,7 @@ func TestCatalog(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"annotate", "check", "delete", "list", "new", "notes", "send-notes", "show", "uncheck"} {
+	for _, want := range []string{"annotate", "check", "create", "delete", "list", "new", "notes", "send-notes", "show", "uncheck"} {
 		if !strings.Contains(" "+strings.Join(verbs, " ")+" ", " "+want+" ") {
 			t.Fatalf("verb %s missing: %v", want, verbs)
 		}
