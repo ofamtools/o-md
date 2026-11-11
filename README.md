@@ -91,31 +91,87 @@ MCP gateway as `md.doc.*`:
 ```sh
 o md doc list [--root DIR] [--archived]
 o md doc new [--name NAME] [--root DIR]
-o md doc show|get|delete|archive|yank-path --target PATH
-o md doc set --target PATH --props '{"@label": "NEW"}'       # rename the file
-o md doc set --target PATH --props '{"@archive": false}'    # restore it from .archive
-o md doc notes|annotate|check|uncheck|send-notes --target PATH ...
+o md doc show|get|edit|delete|archive|restore|duplicate|yank|history --target ID_OR_PATH
+o md doc rename NEW_NAME --target ID_OR_PATH
+o md doc move DESTINATION.md --target ID_OR_PATH
+o md doc set --target ID_OR_PATH --props '{"content": "# Updated\n"}'
+o md doc reveal|yank-path|open --target ID_OR_PATH
+o md doc open-with --with "Visual Studio Code" --target ID_OR_PATH
+o md doc edit-in-pane --target ID_OR_PATH
+o md doc send-to-pane PANE --target ID_OR_PATH
+o md doc send-to-note [NOTE] --target ID_OR_PATH
+o md doc add-to-project PROJECT --target ID_OR_PATH
+o md doc relate --to project:PROJECT --target ID_OR_PATH
+o md doc notes|annotate|check|uncheck|send-notes --target ID_OR_PATH ...
 o md doc --help                  # every verb and its parameters
 ```
 
 `doc list` walks the folders configured in `docs.roots`
 (`$O_MD_ROOTS` overrides; set it with
-`o md settings set docs.roots '["~/notes"]'`) and the
+`o md setting set docs.roots '["~/notes"]'`) and the
 host's project directories (`$MTM_PROJECT_DIRS`: each one's top-level `*.md`
 and `docs/**/*.md`). Rows show title, root, modified time, open tasks and open
 notes. `doc archive` moves a file to `<root>/.archive/<relative path>` and
-`set` with `@archive` false moves it back (what `doc restore` was). Both refuse to overwrite an existing file.
+`doc restore` moves it back. Both refuse to overwrite an existing file.
 The default list skips `.archive`; `--archived` lists only archived files.
 Set `docs.hide-archived` to `false` to include them in the normal list.
-`doc delete` remains available to the owner with confirmation and carries
-the destructive flag for agent-aware hosts. Hosts using ochazuke v0.85.0
-or newer refuse it for agents and name `doc.archive` instead.
+The standard `show` opens the document's property form in a TUI; `open` opens
+its rendered Markdown editor. `open-with` is deliberately different: it uses
+the named OS application through `--with`.
+The same typed path supplies `reveal` and `yank-path` in both standalone and
+mounted runtimes (`paths.free-verbs`, default on).
+
+Deletion is archive-first by default (`delete.archive`). To go straight to
+the system trash, use `doc delete --archive-first=false --target ID --yes`.
+The confirmation explicitly names the system trash. macOS uses Finder;
+Linux requires `gio`. Failure to contact the trash service leaves the file
+in place; there is no permanent-delete fallback. Agents are directed to
+archive rather than destructive deletion.
+
+Document IDs are durable metadata in `documents.json` under the data
+directory. Existing files are imported without modifying their Markdown.
+Current paths still select documents; old paths stop resolving after a move.
+Moving, renaming, archiving and restoring keep the ID, relations and history.
+Standard duplicate copies the complete Markdown text, including inline notes,
+to a new file and ID. Runtime undo (`ochazuke.history-entry.undo`) restores
+standard store changes; undoing trash recreates the original file and keeps
+the trash copy. Keep the data directory when moving between machines.
+Upgraded hosts normalize earlier path-key references through the declared
+human path selector before a rename; extensions do not rewrite host data.
+
+Host operations use `OCHAZUKE_HOST` and fail explicitly when no host is
+configured. `edit-in-pane` starts `$VISUAL`, then `$EDITOR`, else `vi` as an
+argv command in a new pane. `send-to-pane` pastes the complete document
+without pressing Enter. `send-to-note` appends to an existing note or creates
+a new note about this document. `add-to-project` delegates to the host's
+shared project relation handler. Parameters are noun-typed; mounted hosts
+derive `pane.receive-md-doc`, `note.receive-md-doc` and `project.add-md-doc`
+from reciprocal declarations, using the same original handler.
+`notes` and `send-notes` continue to select, compose and mark inline notes.
+
+The standalone editor and catalog CLI share this store. Generated record
+keys can be disabled with `keys.noun-defaults=false`; the standard form
+detail with `detail.show-form=false`; the inherited Nouns tab with
+`nouns.page=false`. No application-specific key switches are added.
+
+### Compared with Vim
+
+| Vim form | Help tag | o-md |
+|---|---|---|
+| `:edit FILE` | `:help :edit` | Similar: `doc open` opens the rendered file; missing files opened directly are recorded immediately. |
+| `:file NAME` | `:help :file` | Different: `doc rename` renames the actual file, preserving its document ID. |
+| `:undo` | `:help undo` | Same intent: editor undo changes text; runtime history undo reverses document-store changes. |
+| `:!$EDITOR FILE` | `:help :!` | Different: `edit-in-pane` uses argv in a host pane, never shell evaluation. |
+
+Generated settings, bindings and standard verbs are in
+[`docs/reference/`](docs/reference/README.md); regenerate with `make reference`.
 
 ## Data
 
-Scratch buffers live in `$O_MD_DATA`, else `$XDG_DATA_HOME/o-md`, else
-`~/.local/share/o-md`; `--data DIR` overrides it. Named files are edited where
-they are. `$O_MD_MTM` names another `mtm` bin (tests).
+The data directory is `$O_MD_DATA`, else `$XDG_DATA_HOME/o-md`, else
+`~/.local/share/o-md`; `--data DIR` overrides it. It contains scratch files,
+stable document IDs and document relations. Named files stay at their
+selected paths. `$O_MD_MTM` names another `mtm` bin for the notes transport.
 
 ## Build
 
