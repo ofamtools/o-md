@@ -159,12 +159,15 @@ type editorLaunch struct {
 	Stdout io.Writer
 }
 
+// starts reports whether there is something to draw the editor on.
+func (l editorLaunch) starts() bool { return l.Smoke || isTerminal(l.Stdout) }
+
 // launch is the command line's open: the editor on the terminal. Without a
 // terminal to draw on (a host's job, a pipe) nothing starts and doc.open
 // answers the buffer's record.
 func (c *catalogApp) launch(l editorLaunch) func(openTarget) error {
 	return func(t openTarget) error {
-		if !l.Smoke && !isTerminal(l.Stdout) {
+		if !l.starts() {
 			return nil
 		}
 		app, err := newApp(t.Path, c.state.dir(), t.Scratch)

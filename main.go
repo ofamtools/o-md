@@ -16,6 +16,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -110,7 +111,14 @@ func run(argv []string, stdin io.Reader, stdout io.Writer) error {
 		return err
 	}
 	c.data, c.stdin = a.flags["data"], stdin
-	c.open = c.launch(editorLaunch{Smoke: a.has("smoke"), Stdout: stdout})
-	_, err = c.r.Execute(q)
-	return err
+	l := editorLaunch{Smoke: a.has("smoke"), Stdout: stdout}
+	c.open = c.launch(l)
+	v, err := c.r.Execute(q)
+	if err != nil || l.starts() {
+		return err
+	}
+	// No terminal to draw on: answer the buffer's record, as the verb does.
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
 }

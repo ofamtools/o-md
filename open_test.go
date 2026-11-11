@@ -163,9 +163,12 @@ func TestBareFormsRunTheVerbs(t *testing.T) {
 	if out := bare("", "scratch"); !strings.Contains(out, "# Piped") {
 		t.Fatalf("o-md scratch: %q", out)
 	}
-	// The same words in noun verb form answer the buffer's record when there
-	// is no terminal to draw on.
+	// With no terminal to draw on, the bare form and the noun verb form both
+	// answer the buffer's record and start nothing.
 	var record map[string]any
+	if err := json.Unmarshal([]byte(bare("", missing)), &record); err != nil || record["path"] != missing || record["saved"] != false || exists(missing) {
+		t.Fatalf("o-md PATH without a terminal: %v %v", record, err)
+	}
 	if err := json.Unmarshal([]byte(mustShell(t, "--data", data, "doc", "open", missing)), &record); err != nil || record["path"] != missing || record["saved"] != false || exists(missing) {
 		t.Fatalf("o-md doc open PATH: %v %v", record, err)
 	}
