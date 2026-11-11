@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Changed: requires ochazuke v0.122.1 and oden v0.5.0. Uses the current standard document scaffold, typed path/time fields and generated noun actions.
+
 ## v0.6.0
 
 - Changed: requires ochazuke v0.110.1 (esc only leaves insert in modals and `q` closes them; label-first pickers).

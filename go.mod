@@ -5,8 +5,8 @@ go 1.26.0
 require (
 	charm.land/bubbletea/v2 v2.1.0
 	github.com/charmbracelet/x/ansi v0.11.9
-	ofam.dev/ochazuke v0.110.1
-	ofam.dev/oden v0.3.0
+	ofam.dev/ochazuke v0.122.1
+	ofam.dev/oden v0.5.0
 )
 
 require (
