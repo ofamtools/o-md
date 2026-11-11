@@ -6,7 +6,7 @@ require (
 	charm.land/bubbletea/v2 v2.1.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
-	ofam.dev/ochazuke v0.124.0
+	ofam.dev/ochazuke v0.124.1
 	ofam.dev/oden v0.5.1
 )
 

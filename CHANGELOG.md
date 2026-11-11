@@ -2,6 +2,7 @@
 
 ## v0.7.0
 
+- Changed: requires ochazuke v0.124.1 (a key on a focused row acts on it again instead of asking for its subject; the path ask's source keys are restored).
 - Changed: requires ochazuke v0.124.0 and oden v0.5.1. Uses the current standard document scaffold, typed path/time fields and generated noun actions.
 - Added: the same complete file-backed document store in the catalog CLI and editor: native open, property forms, content edits, rename/move, byte-preserving duplicate, archive/restore, history, yank, persistent relations and standard undo.
 - Changed: documents have stable IDs in the tool data directory; current paths remain human selectors and old paths stop resolving after a move. Path/root props declare file/directory kinds, and modification times use RFC 3339 UTC.
