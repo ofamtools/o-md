@@ -16,7 +16,7 @@ func TestReference(t *testing.T) {
 	}
 	c.r.Config().Disable()
 	model := c.r.ReferenceModel()
-	opts := refdoc.Options{Stamp: refdoc.Stamp{Tool: "o-md", Version: Version, Ochazuke: "v0.122.1"}, Regenerate: "make reference", Check: "go test -run '^TestReference$' ."}
+	opts := refdoc.Options{Stamp: refdoc.Stamp{Tool: "o-md", Version: Version, Ochazuke: "v0.124.0"}, Regenerate: "make reference", Check: "go test -run '^TestReference$' ."}
 	pages := refdoc.Render(model, opts)
 	for name, text := range pages {
 		path := filepath.Join("docs", "reference", name)

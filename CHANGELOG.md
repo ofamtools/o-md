@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Changed: requires ochazuke v0.122.1 and oden v0.5.0. Uses the current standard document scaffold, typed path/time fields and generated noun actions.
+- Changed: requires ochazuke v0.124.0 and oden v0.5.1. Uses the current standard document scaffold, typed path/time fields and generated noun actions.
 - Added: the same complete file-backed document store in the catalog CLI and editor: native open, property forms, content edits, rename/move, byte-preserving duplicate, archive/restore, history, yank, persistent relations and standard undo.
 - Changed: documents have stable IDs in the tool data directory; current paths remain human selectors and old paths stop resolving after a move. Path/root props declare file/directory kinds, and modification times use RFC 3339 UTC.
 - Changed: document delete moves the actual file to the system trash with an explicit confirmation, never permanent removal. The OS command runner is injectable; tests use temp trash fixtures.
