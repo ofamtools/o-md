@@ -668,10 +668,15 @@ func runShell(argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	c.r.Config().StateDir = filepath.Join(c.state.dir(), "state")
 	sh := ocli.New(c.r, "o-md", stdin, stdout, stderr)
 	sh.Version = Version
 	sh.Reveal = c.reveal
+	sh.Prepare = func(context.Context) error {
+		c.r.EnsureHistory()
+		return nil
+	}
 	app := oden.New("o-md", argv, oden.WithBuiltins(), oden.WithStdio(stdin, stdout, stderr))
 	ocli.Mount(app, sh)
-	return app.Run(context.Background())
+	return errors.Join(app.Run(context.Background()), c.r.Config().Flush())
 }

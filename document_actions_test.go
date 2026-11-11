@@ -119,6 +119,25 @@ func TestDocumentScaffoldLifecycle(t *testing.T) {
 	}
 }
 
+func TestDocumentCLIHistory(t *testing.T) {
+	root, _ := docEnv(t)
+	path := filepath.Join(root, "plan.md")
+	var record struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(mustShell(t, "doc", "get", "--id", path)), &record); err != nil {
+		t.Fatal(err)
+	}
+	mustShell(t, "doc", "archive", "--id", record.ID)
+	var entries []ochazuke.HistoryEntry
+	if err := json.Unmarshal([]byte(mustShell(t, "doc", "history", "--id", record.ID)), &entries); err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Request.Verb != "archive" {
+		t.Fatalf("history across CLI sessions = %+v", entries)
+	}
+}
+
 func TestDocumentTUIUsesSameStore(t *testing.T) {
 	root, _ := docEnv(t)
 	path := filepath.Join(root, "plan.md")

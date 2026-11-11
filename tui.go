@@ -43,6 +43,7 @@ func newApp(path, data string, scratch bool) (*App, error) {
 	}
 	c.data = data
 	r := c.r
+	r.Config().StateDir = filepath.Join(c.state.dir(), "state")
 	a := &App{r: r, path: path, scratch: scratch, data: data}
 	a.m = ochazuke.NewModel(r)
 	var src markdown.Source

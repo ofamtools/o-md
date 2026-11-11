@@ -134,10 +134,15 @@ Current paths still select documents; old paths stop resolving after a move.
 Moving, renaming, archiving and restoring keep the ID, relations and history.
 Standard duplicate copies the complete Markdown text, including inline notes,
 to a new file and ID. Runtime undo (`ochazuke.history-entry.undo`) restores
-standard store changes; undoing trash recreates the original file and keeps
-the trash copy. Keep the data directory when moving between machines.
+standard store changes in the current session; undoing trash recreates the
+original file and keeps the trash copy. Keep the data directory when moving
+between machines.
 Upgraded hosts normalize earlier path-key references through the declared
 human path selector before a rename; extensions do not rewrite host data.
+CLI commands and the TUI share persisted runtime history under `DATA/state`.
+The inherited `history-limit` setting controls retention; `0` disables it.
+The runtime persists only its permitted simple values, not full text snapshots,
+so in-session text/delete undo is not promised after a restart.
 
 Host operations use `OCHAZUKE_HOST` and fail explicitly when no host is
 configured. `edit-in-pane` starts `$VISUAL`, then `$EDITOR`, else `vi` as an
