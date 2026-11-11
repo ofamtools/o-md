@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0
 
 - Changed: requires ochazuke v0.124.0 and oden v0.5.1. Uses the current standard document scaffold, typed path/time fields and generated noun actions.
 - Added: the same complete file-backed document store in the catalog CLI and editor: native open, property forms, content edits, rename/move, byte-preserving duplicate, archive/restore, history, yank, persistent relations and standard undo.
