@@ -947,3 +947,11 @@ send-to-note	action	yes	o-md document note transport
 send-to-pane	action	yes	o-md document pane transport
 show-archived	action	seed	ochazuke v0.122.1
 unrelate	action	yes	ochazuke general relation removal
+bind-start	action	seed	
+bind-finish	action	seed	
+bind-drop	action	seed	
+bind-literal	action	seed	
+bind-cancel	action	seed	
+look	action	yes	och-rail-focus: ochazuke.rail.look sets the rail's look (rail.look: full or float)
+rail	noun	yes	och-rail-focus: the rail region beside a page's main area (ochazuke.rail)
+resize	action	yes	och-rail-focus: ochazuke.rail.resize sets the rail's width (rail.width)
