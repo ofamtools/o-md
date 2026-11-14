@@ -140,7 +140,7 @@ func (c *catalogApp) define() {
 	// here, so a host mounts nothing for it.
 	r.DefineOwn(paneNoun)
 	r.Define(docNoun).Columns(docColumns...).Props(docProps()...).Store(c.docStore()).
-		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md); --scratch lists the scratch buffers instead").Rows(docNoun).Fetch().Quiet().
+		Verb("list", c.listDocs, "List the Markdown files under the docs roots (docs.roots), --root and the host's project directories ($MTM_PROJECT_DIRS: each one's top-level *.md and docs/**/*.md); --scratch lists the scratch buffers instead").Rows(docNoun).Fetch().Quiet().Table().
 		Verb("open", c.openAction, "Open PATH in o-md's rendered Markdown editor (not an OS application): a path that does not exist yet is a new, named buffer written on its first change, - reads standard input into a new scratch buffer, and no path is a new scratch buffer").OpensPage(docsPageID).Positional("path").
 		Verb("reopen", c.reopenAction, "Open the newest scratch buffer again (a new one when there is none)").OfCollection().
 		Verb("notes", c.on(c.notes), "The doc's notes: JSON records, or with --format prompt one message for an agent").Fetch().
@@ -670,7 +670,20 @@ func isShellCommand(argv []string) bool {
 		return true
 	}
 	c, err := newCatalogApp()
-	return err == nil && c.r.Noun(argv[0]) != nil
+	if err != nil {
+		return false
+	}
+	if c.r.Noun(argv[0]) != nil {
+		return true
+	}
+	// A group of dotted nouns (ochazuke.settings: ochazuke host serve) is a
+	// command word too, never a file to open.
+	for name := range c.r.Nouns {
+		if strings.HasPrefix(name, argv[0]+".") {
+			return true
+		}
+	}
+	return false
 }
 
 // runShell runs one catalog command (o-md catalog, o-md doc VERB ...).
@@ -685,11 +698,12 @@ func runShell(argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	c.stdin = stdin
 	c.open = c.launch(editorLaunch{Stdout: stdout})
-	c.r.Config().StateDir = filepath.Join(c.state.dir(), "state")
-	sh := ocli.New(c.r, "o-md", stdin, stdout, stderr)
+	sh := ocli.New(c.r, "o-md", stdin, stdout, stderr, ocli.Serves())
 	sh.Version = Version
 	sh.Reveal = c.reveal
 	sh.Prepare = func(context.Context) error {
+		// Per call: the data directory follows the call's environment.
+		c.r.Config().StateDir = filepath.Join(c.state.dir(), "state")
 		c.r.EnsureHistory()
 		return nil
 	}

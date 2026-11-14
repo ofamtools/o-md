@@ -338,6 +338,9 @@ func TestCatalog(t *testing.T) {
 	if p.ID != docsPageID || p.Layout != ocli.LayoutSplit || p.Detail == nil || p.Detail.Kind != "markdown" || p.Detail.PathField != "path" || len(p.Lists) != 1 || p.Lists[0].Noun != docNoun {
 		t.Fatalf("page %+v detail %+v", p, p.Detail)
 	}
+	if doc.Serve != ocli.ServeProtocol {
+		t.Fatalf("serve = %d, want the host serve protocol", doc.Serve)
+	}
 	if len(doc.ListColumns(docNoun)) != 5 {
 		t.Fatalf("columns %+v", doc.ListColumns(docNoun))
 	}
@@ -352,11 +355,24 @@ func TestShellCommandOrFile(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
+	if !isShellCommand([]string{"ochazuke", "host", "serve"}) {
+		t.Fatal("the framework's group is a command word")
+	}
 	if !isShellCommand([]string{"doc", "list"}) || isShellCommand([]string{"plan.md"}) || isShellCommand(nil) {
 		t.Fatal("dispatch")
 	}
 	writeFile(t, filepath.Join(dir, "doc"), "# a file called doc\n")
 	if !isShellCommand([]string{"doc"}) || isShellCommand([]string{"./doc"}) {
 		t.Fatal("a command word wins over a file of that name; ./doc is the file")
+	}
+}
+
+// A doc that does not exist is the framework's not-found error naming doc
+// list, not an OS error with a path.
+func TestDocShowUnknown(t *testing.T) {
+	docEnv(t)
+	_, err := shell(t, "doc", "show", "nosuch")
+	if err == nil || err.Error() != `no doc "nosuch"; doc list shows ids` {
+		t.Fatalf("doc show nosuch: %v", err)
 	}
 }

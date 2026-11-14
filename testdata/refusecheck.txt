@@ -1,0 +1,62 @@
+# refusecheck baseline: file, function, class, template, count, reason (tab separated).
+# A row with a reason (E1..E5: rights, loses, failure, declaration, cancel) is a legitimate refusal that stays.
+# A row without one is debt that may only shrink: REFUSECHECK_UPDATE=1 removes rows and lowers counts, never adds.
+# Adding a row is a reviewed edit.
+catalog.go	catalogApp.define	K2	"Enum without Accept: <expr>"	1
+catalog.go	catalogApp.listDocs	K15	"Failed(…)"	2
+catalog.go	catalogApp.makeDoc	K15	"name %q: a name, not a path (pass root for the directory)"	1
+catalog.go	catalogApp.makeDoc	K15	"no docs root: pass root or set %v"	1
+catalog.go	catalogApp.moveToArchive	K3	"restore needs a document under .archive"	1
+catalog.go	catalogApp.note	K15	"no note text"	1
+catalog.go	catalogApp.notes	K2	"unknown format %q (jsonl or prompt)"	1
+catalog.go	catalogApp.on	K15	"Failed(…)"	2
+catalog.go	catalogApp.on	K3	"name a doc: --target PATH"	1
+catalog.go	catalogApp.renameDoc	K15	"rename needs to"	1
+catalog.go	catalogApp.sendNotes	K3	"send-notes needs a pane (o-md doc send-notes PANE --target PATH)"	1
+cli.go	agents	K14	"mtm agent scan: %w"	2	failure
+cli.go	args.file	K3	"o-md %s needs a FILE"	1
+cli.go	args.text	K15	"no note text"	1
+cli.go	changeNote	K15	"a note change needs item, reply, edit, resolve, unresolve or delete"	1
+cli.go	checkItem	K8	"%q is not a checklist item"	1
+cli.go	cmdCheck	K15	"o-md %s needs --item MATCH"	1
+cli.go	cmdNote	K15	"o-md note needs --item MATCH, --reply ID, --edit ID, --resolve ID, --unresolve ID or --delete ID"	1
+cli.go	cmdNotes	K15	"unknown --format %q (jsonl or prompt)"	1
+cli.go	cmdScratch	K15	"doc list answered %T, not rows"	1
+cli.go	cmdSend	K15	"o-md send needs --pane ID (or --dry-run)"	1
+cli.go	deliver	K15	"mtm agent enqueue: %v: %s"	1
+cli.go	deliver	K15	"pane %s is not at rest (%s); not sent (without --now it is queued)"	1
+cli.go	parseArgs	K3	"--%s needs a value"	1
+cli.go	sendPrompt	K15	"no open, unsent notes to send"	1
+cli.go	splitDataArgs	K3	"--data needs a directory"	1
+doc_store.go	catalogApp.creationDirectory	K15	"no docs root: pass root or set %v"	1
+doc_store.go	catalogApp.docStore	K11	"Confirm: <expr> without Loses"	1
+doc_store.go	catalogApp.patchDestination	K3	"a doc needs a %s"	1
+doc_store.go	catalogApp.patchThing	K4	"%s: no such file"	1
+document_actions.go	catalogApp.changeLocation	K15	"Failed(…)"	2
+document_actions.go	catalogApp.sendToNote	K2	"host note get returned %T, expected a record"	1
+document_actions.go	catalogApp.sendToNote	K4	"host note has no text"	1
+document_actions.go	editorWords	K15	"empty editor command"	1
+document_actions.go	editorWords	K15	"unterminated quote or escape in editor command"	1
+document_actions.go	hostCall	K3	"this action needs a configured ochazuke host (OCHAZUKE_HOST)"	1
+file_ops.go	moveDocument	K3	"%s: moving a document requires a regular file"	1
+notes.go	identity	K15	"an agent (pane %s) may not sign as the owner %q"	1
+notes.go	markSent	K15	"no note %s"	1
+notes.go	mayChange	K15	"note %s is %s's: only its author or the owner may change it"	1
+notes.go	noteByID	K15	"no note %s; the notes are %s"	1
+notes.go	noteByID	K4	"no note %s: the file has no notes"	1
+notes.go	var errUsage	K15	"usage"	1
+open.go	catalogApp.openAction	K15	"Failed(…)"	1
+open.go	catalogApp.openInput	K14	"read %s: %w"	1	failure
+open.go	catalogApp.opened	K15	"Failed(…)"	1
+open.go	catalogApp.reopenAction	K15	"Failed(…)"	1
+relations.go	documentState.move	K15	"%s already belongs to another document"	1
+relations.go	documentState.path	K15	"document %s is in the system trash"	1
+relations.go	documentState.path	K4	"unknown document %s"	1
+relations.go	documentState.restore	K15	"document %s is not in the system trash"	1
+trash.go	trashFile	K15	"system trash is not supported on %s; the file was not deleted"	1
+trash.go	var trashRun	K14	"system trash: %w: %s"	1	failure
+tui.go	App.saveAs	K3	"save-as needs a PATH"	1
+tui.go	App.send	K15	"no open, unsent notes to send"	1
+tui.go	App.sendNotes	K15	"Failed(…)"	1
+tui.go	App.sendNotes	K15	"no open, unsent notes to send"	1
+tui.go	result	K15	"Failed(…)"	1

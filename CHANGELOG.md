@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Changed: requires ochazuke v0.137.0.
+- Added: the catalog declares the host serve protocol (`"serve": 1`, `cli.Serves()`), so mtm may keep o-md running and send it calls over a pipe. Every environment read is per call (the owner identity, `$O_MD_ROOTS`, `$MTM_PROJECT_DIRS`, the data directory, and the state directory now set before each command), and `o-md ochazuke host serve` is a command word, not a file to open.
+- Changed: `doc list` is a table for a person at a terminal (`.Table()`); a pipe still gets JSON.
+- Fixed: `doc show nosuch` answers `no doc "nosuch"; doc list shows ids`, not a raw OS error with a path.
+- Added: `TestNoNewRefusals` (ochazuke's refusecheck) with today's baseline, `testdata/refusecheck.txt`.
+
 ## v0.7.0
 
 - Changed: requires ochazuke v0.124.1 (a key on a focused row acts on it again instead of asking for its subject; the path ask's source keys are restored).

@@ -76,7 +76,12 @@ func (c *catalogApp) docStore() ochazuke.Store {
 			if err != nil {
 				return nil, err
 			}
-			return c.docThing(path)
+			th, err := c.docThing(path)
+			if errors.Is(err, os.ErrNotExist) {
+				// Not a raw OS error with a path: the framework's not-found words.
+				return nil, ochazuke.ErrNotFound
+			}
+			return th, err
 		},
 		List: func(_ ochazuke.Ctx, q ochazuke.ListQuery) ([]ochazuke.Thing, error) {
 			root, _ := q.Args["root"].(string)
